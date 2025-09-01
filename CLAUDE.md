@@ -1,0 +1,1 @@
+- Sempre utilize o português do Brasil para conversar com o usuário.
