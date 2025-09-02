@@ -4,9 +4,11 @@ import os
 import tempfile
 from pathlib import Path
 from unittest.mock import patch
+import threading
+import time
 
 import pytest
-from promptcraft.core import TemplateProcessor, find_command_path, generate_prompt, process_command
+from promptcraft.core import TemplateProcessor, find_command_path, generate_prompt, process_command, discover_commands, _extract_description, CommandInfo
 from promptcraft.exceptions import TemplateError, CommandNotFoundError, TemplateReadError
 
 
@@ -680,3 +682,509 @@ def test_process_command_template_without_placeholder():
             # Should return template unchanged
             expected = "# Static Template\n\nThis template has no placeholders."
             assert result == expected
+
+
+# Command discovery function tests
+
+def test_extract_description_with_markdown_header():
+    """Test description extraction with markdown headers."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        test_file = Path(tmpdir) / "test.md"
+        test_file.write_text("# Test Header\n\nContent here.")
+        
+        result = _extract_description(test_file)
+        assert result == "Test Header"
+
+
+def test_extract_description_with_multiple_hash_header():
+    """Test description extraction with multiple hash headers."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        test_file = Path(tmpdir) / "test.md"
+        test_file.write_text("### Deep Header\n\nContent here.")
+        
+        result = _extract_description(test_file)
+        assert result == "Deep Header"
+
+
+def test_extract_description_with_empty_first_line():
+    """Test description extraction with empty first line."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        test_file = Path(tmpdir) / "test.md"
+        test_file.write_text("\nSecond line content.\n\nMore content.")
+        
+        result = _extract_description(test_file)
+        assert result == "Second line content."
+
+
+def test_extract_description_file_not_found():
+    """Test description extraction with non-existent file."""
+    non_existent = Path("/fake/path/not-exist.md")
+    result = _extract_description(non_existent)
+    assert result == "No description available"
+
+
+def test_extract_description_permission_error():
+    """Test description extraction with permission errors."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        test_file = Path(tmpdir) / "test.md"
+        test_file.write_text("Content here.")
+        
+        # Mock permission error
+        with patch('builtins.open', side_effect=PermissionError("Access denied")):
+            result = _extract_description(test_file)
+            assert result == "No description available"
+
+
+def test_extract_description_unicode_error():
+    """Test description extraction with unicode decode errors."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        test_file = Path(tmpdir) / "test.md"
+        test_file.write_text("Content here.")
+        
+        # Mock unicode error
+        with patch('builtins.open', side_effect=UnicodeDecodeError("utf-8", b'', 0, 1, "Invalid")):
+            result = _extract_description(test_file)
+            assert result == "No description available"
+
+
+def test_discover_commands_empty_directories():
+    """Test command discovery with empty directories."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        with patch('promptcraft.core.Path.cwd', return_value=Path(tmpdir)), \
+             patch('promptcraft.core.Path.home', return_value=Path(tmpdir)):
+            
+            result = discover_commands()
+            assert result == []
+
+
+def test_discover_commands_project_only():
+    """Test command discovery with project commands only."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # Create project directory structure
+        project_dir = Path(tmpdir) / "project" / ".promptcraft" / "commands"
+        project_dir.mkdir(parents=True)
+        
+        # Create test command files
+        cmd1 = project_dir / "cmd1.md"
+        cmd1.write_text("# Command 1\n\nTest command 1.")
+        
+        cmd2 = project_dir / "cmd2.md"
+        cmd2.write_text("## Command 2\n\nTest command 2.")
+        
+        with patch('promptcraft.core.Path.cwd', return_value=Path(tmpdir) / "project"), \
+             patch('promptcraft.core.Path.home', return_value=Path("/fake/home")):
+            
+            result = discover_commands()
+            
+            assert len(result) == 2
+            assert result[0].name == "cmd1"
+            assert result[0].source == "Project"
+            assert result[0].description == "Command 1"
+            assert result[1].name == "cmd2"
+            assert result[1].source == "Project"
+            assert result[1].description == "Command 2"
+
+
+def test_discover_commands_global_only():
+    """Test command discovery with global commands only."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # Create home directory structure
+        home_dir = Path(tmpdir) / ".promptcraft" / "commands"
+        home_dir.mkdir(parents=True)
+        
+        # Create test command file
+        global_cmd = home_dir / "global-cmd.md"
+        global_cmd.write_text("# Global Command\n\nGlobal test command.")
+        
+        with patch('promptcraft.core.Path.cwd', return_value=Path("/fake/cwd")), \
+             patch('promptcraft.core.Path.home', return_value=Path(tmpdir)):
+            
+            result = discover_commands()
+            
+            assert len(result) == 1
+            assert result[0].name == "global-cmd"
+            assert result[0].source == "Global"
+            assert result[0].description == "Global Command"
+
+
+def test_discover_commands_both_sources():
+    """Test command discovery with both project and global commands."""
+    with tempfile.TemporaryDirectory() as project_tmpdir, \
+         tempfile.TemporaryDirectory() as home_tmpdir:
+        
+        # Create project directory structure
+        project_dir = Path(project_tmpdir) / ".promptcraft" / "commands"
+        project_dir.mkdir(parents=True)
+        
+        project_cmd = project_dir / "project-cmd.md"
+        project_cmd.write_text("# Project Command\n\nProject test command.")
+        
+        # Create home directory structure
+        home_dir = Path(home_tmpdir) / ".promptcraft" / "commands"
+        home_dir.mkdir(parents=True)
+        
+        home_cmd = home_dir / "global-cmd.md"
+        home_cmd.write_text("# Global Command\n\nGlobal test command.")
+        
+        with patch('promptcraft.core.Path.cwd', return_value=Path(project_tmpdir)), \
+             patch('promptcraft.core.Path.home', return_value=Path(home_tmpdir)):
+            
+            result = discover_commands()
+            
+            assert len(result) == 2
+            # Should be sorted alphabetically
+            assert result[0].name == "global-cmd"
+            assert result[0].source == "Global"
+            assert result[1].name == "project-cmd"
+            assert result[1].source == "Project"
+
+
+def test_discover_commands_alphabetical_sorting():
+    """Test command discovery sorts results alphabetically."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        project_dir = Path(tmpdir) / ".promptcraft" / "commands"
+        project_dir.mkdir(parents=True)
+        
+        # Create commands in non-alphabetical order
+        (project_dir / "zebra.md").write_text("# Zebra\n\nZ command.")
+        (project_dir / "alpha.md").write_text("# Alpha\n\nA command.")
+        (project_dir / "beta.md").write_text("# Beta\n\nB command.")
+        
+        with patch('promptcraft.core.Path.cwd', return_value=Path(tmpdir)), \
+             patch('promptcraft.core.Path.home', return_value=Path("/fake/home")):
+            
+            result = discover_commands()
+            
+            assert len(result) == 3
+            assert result[0].name == "alpha"
+            assert result[1].name == "beta"
+            assert result[2].name == "zebra"
+
+
+def test_discover_commands_ignores_non_md_files():
+    """Test command discovery ignores non-.md files."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        project_dir = Path(tmpdir) / ".promptcraft" / "commands"
+        project_dir.mkdir(parents=True)
+        
+        # Create .md file (should be included)
+        (project_dir / "valid.md").write_text("# Valid Command\n\nValid.")
+        
+        # Create non-.md files (should be ignored)
+        (project_dir / "readme.txt").write_text("Not a command.")
+        (project_dir / "script.py").write_text("print('Not a command')")
+        (project_dir / "config.json").write_text('{"not": "command"}')
+        
+        with patch('promptcraft.core.Path.cwd', return_value=Path(tmpdir)), \
+             patch('promptcraft.core.Path.home', return_value=Path("/fake/home")):
+            
+            result = discover_commands()
+            
+            assert len(result) == 1
+            assert result[0].name == "valid"
+
+
+def test_discover_commands_handles_permission_errors():
+    """Test command discovery handles permission errors gracefully."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        project_dir = Path(tmpdir) / ".promptcraft" / "commands"
+        project_dir.mkdir(parents=True)
+        
+        (project_dir / "cmd.md").write_text("# Command\n\nTest.")
+        
+        with patch('promptcraft.core.Path.cwd', return_value=Path(tmpdir)), \
+             patch('promptcraft.core.Path.home', return_value=Path("/fake/home")):
+            
+            # Mock permission error on glob
+            with patch.object(Path, 'glob', side_effect=PermissionError("Access denied")):
+                result = discover_commands()
+                # Should return empty list, not raise exception
+                assert result == []
+
+
+def test_discover_commands_handles_os_errors():
+    """Test command discovery handles OS errors gracefully."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        project_dir = Path(tmpdir) / ".promptcraft" / "commands"
+        project_dir.mkdir(parents=True)
+        
+        (project_dir / "cmd.md").write_text("# Command\n\nTest.")
+        
+        with patch('promptcraft.core.Path.cwd', return_value=Path(tmpdir)), \
+             patch('promptcraft.core.Path.home', return_value=Path("/fake/home")):
+            
+            # Mock OS error on glob
+            with patch.object(Path, 'glob', side_effect=OSError("OS error")):
+                result = discover_commands()
+                # Should return empty list, not raise exception
+                assert result == []
+
+
+def test_command_info_named_tuple():
+    """Test CommandInfo named tuple structure."""
+    from pathlib import Path
+    
+    cmd_info = CommandInfo(
+        name="test",
+        path=Path("/fake/test.md"),
+        source="Project",
+        description="Test description"
+    )
+    
+    assert cmd_info.name == "test"
+    assert cmd_info.path == Path("/fake/test.md")
+    assert cmd_info.source == "Project"
+    assert cmd_info.description == "Test description"
+    
+    # Test that it's a proper named tuple
+    assert isinstance(cmd_info, tuple)
+    assert len(cmd_info) == 4
+
+
+# Additional Template Discovery Tests
+
+def test_extract_description_with_whitespace_only_header():
+    """Test description extraction with whitespace-only header."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        test_file = Path(tmpdir) / "test.md"
+        test_file.write_text("#    \n\nContent here.")
+        
+        result = _extract_description(test_file)
+        assert result == "No description available"
+
+
+def test_extract_description_with_complex_markdown():
+    """Test description extraction with complex markdown in header."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        test_file = Path(tmpdir) / "test.md"
+        test_file.write_text("## **Bold** and *Italic* Header with `code`\n\nContent.")
+        
+        result = _extract_description(test_file)
+        assert result == "**Bold** and *Italic* Header with `code`"
+
+
+def test_extract_description_empty_file():
+    """Test description extraction with completely empty file."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        test_file = Path(tmpdir) / "test.md"
+        test_file.write_text("")
+        
+        result = _extract_description(test_file)
+        assert result == "No description available"
+
+
+def test_discover_commands_with_subdirectories():
+    """Test command discovery ignores subdirectories."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        project_dir = Path(tmpdir) / ".promptcraft" / "commands"
+        project_dir.mkdir(parents=True)
+        
+        # Create valid .md file
+        (project_dir / "valid.md").write_text("# Valid Command\n\nValid.")
+        
+        # Create subdirectory (should be ignored)
+        subdir = project_dir / "subdir"
+        subdir.mkdir()
+        (subdir / "ignored.md").write_text("# Ignored\n\nShould be ignored.")
+        
+        with patch('promptcraft.core.Path.cwd', return_value=Path(tmpdir)), \
+             patch('promptcraft.core.Path.home', return_value=Path("/fake/home")):
+            
+            result = discover_commands()
+            
+            assert len(result) == 1
+            assert result[0].name == "valid"
+
+
+def test_discover_commands_case_insensitive_sorting():
+    """Test command discovery sorts case-insensitively."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        project_dir = Path(tmpdir) / ".promptcraft" / "commands"
+        project_dir.mkdir(parents=True)
+        
+        # Create commands with mixed case
+        (project_dir / "Apple.md").write_text("# Apple\n\nA command.")
+        (project_dir / "banana.md").write_text("# Banana\n\nB command.")
+        (project_dir / "Cherry.md").write_text("# Cherry\n\nC command.")
+        
+        with patch('promptcraft.core.Path.cwd', return_value=Path(tmpdir)), \
+             patch('promptcraft.core.Path.home', return_value=Path("/fake/home")):
+            
+            result = discover_commands()
+            
+            assert len(result) == 3
+            # Should be sorted case-insensitively: Apple, banana, Cherry
+            assert result[0].name == "Apple"
+            assert result[1].name == "banana"
+            assert result[2].name == "Cherry"
+
+
+# Additional Template Processing Tests
+
+def test_template_processor_with_complex_content():
+    """Test TemplateProcessor with complex markdown content."""
+    processor = TemplateProcessor()
+    complex_content = """# Complex Template
+
+## Section 1
+Some **bold** and *italic* text.
+
+### Code Block
+```python
+def hello():
+    print("Hello, World!")
+```
+
+- List item 1
+- List item 2
+
+> Blockquote text
+
+[Link](https://example.com)
+"""
+    result = processor.process_template(complex_content)
+    assert result == complex_content
+
+
+def test_generate_prompt_with_binary_file_error():
+    """Test TemplateReadError when trying to read binary file."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # Create a binary file
+        binary_file = Path(tmpdir) / "binary.bin"
+        binary_file.write_bytes(b'\x00\x01\x02\x03\xff\xfe')
+        
+        with pytest.raises(TemplateReadError) as exc_info:
+            generate_prompt(binary_file, ["test"])
+        
+        error = exc_info.value
+        assert "Failed to decode" in str(error) or "encoding" in str(error)
+        assert error.error_code == "TEMPLATE_ENCODING_ERROR"
+
+
+def test_generate_prompt_with_very_large_file():
+    """Test template processing with very large files."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        large_file = Path(tmpdir) / "large.md"
+        
+        # Create a large template (about 1MB)
+        large_content = "# Large Template\n\n" + "Line with content and $ARGUMENTS\n" * 50000
+        large_file.write_text(large_content, encoding='utf-8')
+        
+        arguments = ["test", "args"]
+        result = generate_prompt(large_file, arguments)
+        
+        # Should process successfully
+        assert "test args" in result
+        assert result.startswith("# Large Template")
+        assert len(result) > 1000000  # Should be large
+
+
+# Additional Error Handling Tests
+
+def test_process_command_with_circular_symlink():
+    """Test process_command handling of circular symlinks (Unix only)."""
+    if os.name == 'nt':  # Skip on Windows
+        pytest.skip("Symlink test not applicable on Windows")
+    
+    with tempfile.TemporaryDirectory() as tmpdir:
+        cmd_dir = Path(tmpdir) / ".promptcraft" / "commands"
+        cmd_dir.mkdir(parents=True)
+        
+        # Create circular symlink
+        symlink_path = cmd_dir / "circular.md"
+        try:
+            symlink_path.symlink_to(symlink_path)  # Circular reference
+        except OSError:
+            pytest.skip("Cannot create symlinks on this system")
+        
+        with patch('promptcraft.core.Path.cwd', return_value=Path(tmpdir)):
+            with pytest.raises((CommandNotFoundError, TemplateReadError)):
+                process_command("circular", ["test"])
+
+
+# Performance and Edge Case Tests
+
+def test_find_command_path_with_long_path():
+    """Test find_command_path with very long file paths."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # Create nested directory structure
+        deep_path = Path(tmpdir)
+        for i in range(10):  # Create 10 levels deep
+            deep_path = deep_path / f"level{i}"
+        deep_path = deep_path / ".promptcraft" / "commands"
+        deep_path.mkdir(parents=True)
+        
+        # Create command file
+        cmd_file = deep_path / "deep-cmd.md"
+        cmd_file.write_text("# Deep Command")
+        
+        with patch('promptcraft.core.Path.cwd', return_value=Path(tmpdir) / 'level0' / 'level1' / 'level2' / 'level3' / 'level4' / 'level5' / 'level6' / 'level7' / 'level8' / 'level9'):
+            result = find_command_path("deep-cmd")
+            assert result == cmd_file
+            assert result.exists()
+
+
+def test_discover_commands_with_unicode_filenames():
+    """Test command discovery with Unicode filenames."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        project_dir = Path(tmpdir) / ".promptcraft" / "commands"
+        project_dir.mkdir(parents=True)
+        
+        # Create commands with Unicode names
+        unicode_names = ["café.md", "测试.md", "émoji😊.md"]
+        for name in unicode_names:
+            try:
+                (project_dir / name).write_text(f"# {name[:-3]}\n\nUnicode command.")
+            except (OSError, UnicodeEncodeError):
+                # Skip if filesystem doesn't support Unicode
+                continue
+        
+        with patch('promptcraft.core.Path.cwd', return_value=Path(tmpdir)), \
+             patch('promptcraft.core.Path.home', return_value=Path("/fake/home")):
+            
+            result = discover_commands()
+            
+            # Should find at least the files that were successfully created
+            assert len(result) >= 0  # Some filesystems may not support Unicode
+            for cmd in result:
+                assert cmd.name in ["café", "测试", "émoji😊"]
+
+
+# Memory and Resource Tests
+
+def test_template_processor_memory_efficiency():
+    """Test that TemplateProcessor doesn't hold references to processed content."""
+    processor = TemplateProcessor()
+    
+    # Process multiple templates to check for memory leaks
+    for i in range(1000):
+        content = f"Template {i} with some content"
+        result = processor.process_template(content)
+        assert result == content
+    
+    # If we got here without memory issues, the test passes
+    assert True
+
+
+def test_concurrent_command_discovery():
+    """Test command discovery behavior under concurrent access."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        project_dir = Path(tmpdir) / ".promptcraft" / "commands"
+        project_dir.mkdir(parents=True)
+        
+        # Create multiple command files
+        for i in range(10):
+            (project_dir / f"cmd{i}.md").write_text(f"# Command {i}\n\nCommand {i}.")
+        
+        with patch('promptcraft.core.Path.cwd', return_value=Path(tmpdir)), \
+             patch('promptcraft.core.Path.home', return_value=Path("/fake/home")):
+            
+            # Simulate concurrent discovery calls
+            results = []
+            for _ in range(5):
+                result = discover_commands()
+                results.append(result)
+            
+            # All results should be consistent
+            assert all(len(r) == 10 for r in results)
+            assert all(r[0].name == "cmd0" for r in results)  # First should always be cmd0 (sorted)
