@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "serena": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "uv run --directory E:\\serena serena start-mcp-server --context ide-assistant --project E:\\promptcraft"
+      ]
+    }
+  }
+}

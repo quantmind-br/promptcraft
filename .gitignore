@@ -167,3 +167,20 @@ cython_debug/
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Benchmarks and performance data
+*_cold_start.json
+*_warm_execution.json
+memory_analysis.json
+final_validation.json
+
+# Test and debug files
+debug_test.py
+simple_test*.py
+
+# Build artifacts
+build/
+dist/
+
+# Empty files
+nul

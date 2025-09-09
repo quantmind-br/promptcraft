@@ -6,9 +6,10 @@ from click.testing import CliRunner
 import tempfile
 from pathlib import Path
 
-from promptcraft.main import promptcraft, _initialize_project, _list_commands
+from promptcraft.main import promptcraft, _initialize_project, _list_commands  
 from promptcraft.exceptions import CommandNotFoundError, TemplateReadError
 from promptcraft.core import CommandInfo
+from promptcraft import main as main_module
 
 
 class TestCLICommandExecution:
@@ -18,7 +19,7 @@ class TestCLICommandExecution:
         """Set up test fixtures."""
         self.runner = CliRunner()
 
-    @patch('promptcraft.main.process_command')
+    @patch.object(main_module, 'process_command') 
     @patch('promptcraft.main._copy_to_clipboard')
     def test_all_command_invocation_patterns(self, mock_copy_clipboard, mock_process):
         """Test all supported command invocation patterns."""
@@ -40,8 +41,8 @@ class TestCLICommandExecution:
             # With spaces in arguments
             (['/command', 'arg with spaces', 'normal'], 'command', ['arg with spaces', 'normal']),
             
-            # With special characters
-            (['/command', '--flag', 'value=test', 'path/file.txt'], 'command', ['--flag', 'value=test', 'path/file.txt']),
+            # With special characters (use -- to separate CLI options from arguments)
+            (['/command', '--', '--flag', 'value=test', 'path/file.txt'], 'command', ['--flag', 'value=test', 'path/file.txt']),
             
             # With empty arguments
             (['/command', '', 'after-empty'], 'command', ['', 'after-empty']),
@@ -51,10 +52,10 @@ class TestCLICommandExecution:
             mock_process.reset_mock()
             result = self.runner.invoke(promptcraft, args)
             
-            assert result.exit_code == 0, f"Failed for args: {args}"
+            assert result.exit_code == 0, f"Failed for args: {args}. Output: {result.output}"
             mock_process.assert_called_once_with(expected_cmd, expected_args)
 
-    @patch('promptcraft.main.process_command')
+    @patch.object(main_module, 'process_command') 
     @patch('promptcraft.main._copy_to_clipboard')
     def test_command_name_normalization(self, mock_copy_clipboard, mock_process):
         """Test command name normalization (slash stripping)."""
@@ -129,7 +130,7 @@ class TestCLIArgumentParsing:
         assert "Command name is required" in result.output
         assert "Use 'promptcraft --help' for usage information" in result.output
 
-    @patch('promptcraft.main.process_command')
+    @patch.object(main_module, 'process_command') 
     @patch('promptcraft.main._copy_to_clipboard')
     def test_argument_parsing_edge_cases(self, mock_copy_clipboard, mock_process):
         """Test argument parsing with edge cases."""
@@ -152,8 +153,8 @@ class TestCLIArgumentParsing:
             # Unicode arguments
             (['/test', 'café', '漢字', '🚀'], 'test', ['café', '漢字', '🚀']),
             
-            # Mixed argument types
-            (['/test', '123', 'text', '--flag', 'value=x'], 'test', ['123', 'text', '--flag', 'value=x']),
+            # Mixed argument types (use -- to separate CLI options from arguments)
+            (['/test', '123', 'text', '--', '--flag', 'value=x'], 'test', ['123', 'text', '--flag', 'value=x']),
         ]
 
         for args, expected_cmd, expected_args in edge_cases:
@@ -340,7 +341,7 @@ class TestCLIOutputFormatting:
         """Set up test fixtures."""
         self.runner = CliRunner()
 
-    @patch('promptcraft.main.process_command')
+    @patch.object(main_module, 'process_command') 
     @patch('promptcraft.main._copy_to_clipboard')
     def test_success_message_formatting(self, mock_copy_clipboard, mock_process):
         """Test success message formatting consistency."""
@@ -356,7 +357,7 @@ class TestCLIOutputFormatting:
             expected_message = f"Prompt for '{cmd}' copied to clipboard!"
             assert expected_message in result.output
 
-    @patch('promptcraft.main.process_command')
+    @patch.object(main_module, 'process_command') 
     @patch('promptcraft.main._copy_to_clipboard')
     def test_clipboard_fallback_formatting(self, mock_copy_clipboard, mock_process):
         """Test clipboard fallback message formatting."""
@@ -424,7 +425,7 @@ class TestCLIPerformanceAndRobustness:
         """Set up test fixtures."""
         self.runner = CliRunner()
 
-    @patch('promptcraft.main.process_command')
+    @patch.object(main_module, 'process_command') 
     @patch('promptcraft.main._copy_to_clipboard')
     def test_cli_performance_requirement(self, mock_copy_clipboard, mock_process):
         """Test CLI meets <150ms performance requirement."""
@@ -470,7 +471,7 @@ class TestCLIPerformanceAndRobustness:
         # If we reach here without memory errors, test passes
         assert True
 
-    @patch('promptcraft.main.process_command')
+    @patch.object(main_module, 'process_command') 
     @patch('promptcraft.main._copy_to_clipboard')
     def test_cli_concurrent_safety(self, mock_copy_clipboard, mock_process):
         """Test CLI behavior under concurrent usage simulation."""

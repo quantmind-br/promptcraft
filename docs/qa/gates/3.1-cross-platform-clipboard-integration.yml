@@ -1,0 +1,71 @@
+# Quality Gate: 3.1 Cross-Platform Clipboard Integration
+schema: 1
+story: "3.1"
+story_title: "Cross-Platform Clipboard Integration"
+gate: "CONCERNS"
+status_reason: "Implementation solid but CLI runtime error needs investigation. Test environment gaps identified for macOS/Linux."
+reviewer: "Quinn (Test Architect)"
+updated: "2025-09-02T23:30:00Z"
+
+waiver: { active: false }
+
+top_issues:
+  - id: "RUNTIME-001"
+    severity: medium
+    finding: "CLI throws 'Unexpected error occurred' during runtime testing despite individual functions working"
+    suggested_action: "Debug and fix runtime integration issue between Click framework and clipboard functions"
+  - id: "TEST-002"
+    severity: medium
+    finding: "macOS and Linux cross-platform testing incomplete per AC2 and AC3"
+    suggested_action: "Complete testing on actual macOS and Linux environments or document testing approach"
+
+risk_summary:
+  totals:
+    critical: 1
+    high: 2
+    medium: 2
+    low: 0
+  recommendations:
+    must_fix:
+      - "Implement detecção automática de ambiente headless"
+      - "Adicionar fallback automático para --stdout quando GUI indisponível"
+      - "Implementar timeout protection para operações de clipboard (<150ms)"
+      - "Adicionar tratamento específico para PyperclipException"
+    monitor:
+      - "Monitorar taxa de fallback por plataforma"
+      - "Alertas para timeouts de clipboard"
+      - "Tracking de erros cross-platform"
+
+quality_score: 75
+expires: "2025-09-16T23:30:00Z"
+
+evidence:
+  tests_reviewed: 16
+  risks_identified: 5
+  trace:
+    ac_covered: [1, 4, 5, 6, 7]
+    ac_gaps: [2, 3]
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: "No sensitive data exposed, proper exception handling implemented"
+  performance:
+    status: PASS
+    notes: "Timeout protection implemented (150ms), meets requirements"
+  reliability:
+    status: CONCERNS
+    notes: "Runtime integration error needs resolution"
+  maintainability:
+    status: PASS
+    notes: "Clean code structure, comprehensive test coverage, good documentation"
+
+recommendations:
+  immediate:
+    - action: "Debug and fix CLI runtime integration error"
+      refs: ["src/promptcraft/main.py:65-113"]
+    - action: "Complete cross-platform testing on macOS and Linux"
+      refs: ["Story AC2, AC3"]
+  future:
+    - action: "Consider adding clipboard content verification for robustness"
+      refs: ["src/promptcraft/main.py:234-266"]
