@@ -19,24 +19,30 @@ PromptCraft CLI is a powerful command-line interface tool designed to help devel
 
 - **Python:** 3.10 or higher
 - **Operating Systems:** Windows, macOS, Linux
-- **pip:** Python package installer (usually comes with Python)
+- **pipx:** Python application installer (<https://pipx.pypa.io>), or **pip** if you prefer a virtual environment
 
-### Quick Installation
+### Quick Installation (pipx — Recommended)
 
-For end users, install PromptCraft directly from source:
+pipx is the recommended installer: it gives PromptCraft its own virtual environment and puts the `promptcraft` command on your PATH, with no dependency conflicts.
 
 ```bash
+# Install pipx if you don't have it (Python 3.10+)
+python -m pip install pipx
+python -m pipx ensurepath
+
 # Clone the repository
 git clone https://github.com/promptcraft/promptcraft.git
 cd promptcraft
 
-# Install the package
-pip install .
+# Install the CLI into its own virtual environment
+pipx install .
 ```
 
-### Virtual Environment Installation (Recommended)
+Note: on Linux, the clipboard features also require `xclip` or `xsel` to be installed.
 
-Using a virtual environment prevents dependency conflicts:
+### Alternative: pip in a Virtual Environment
+
+If you prefer a manually managed virtual environment (e.g. to work with the source frequently), install with pip inside a venv:
 
 ```bash
 # Create a virtual environment
@@ -123,14 +129,11 @@ python -m ensurepip --upgrade
 If you encounter issues, try a clean installation:
 
 ```bash
-# Uninstall existing installation
-pip uninstall promptcraft
-
-# Clear pip cache
-pip cache purge
+# Uninstall the existing installation
+pipx uninstall promptcraft
 
 # Reinstall
-pip install .
+pipx install .
 ```
 
 ## Development Setup
