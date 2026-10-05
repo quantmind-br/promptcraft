@@ -121,19 +121,13 @@ func (p *Processor) LoadTemplateContent(path string) (string, error) {
 // DeleteTemplate removes a template file from one of the two known template
 // directories. Anything outside them is refused.
 func (p *Processor) DeleteTemplate(path string) error {
-	resolved, err := filepath.Abs(path)
-	if err != nil {
-		return err
-	}
-	resolved = filepath.Clean(resolved)
+	// Symlinks must be resolved before the boundary check: a linked template
+	// directory would otherwise authorize deleting an external target.
+	resolved := realPath(path)
 
 	allowed := []string{}
 	for _, base := range []string{p.ProjectDir(), p.UserDir()} {
-		clean, err := filepath.Abs(base)
-		if err != nil {
-			continue
-		}
-		allowed = append(allowed, filepath.Clean(clean))
+		allowed = append(allowed, realPath(base))
 	}
 
 	inside := false
@@ -204,4 +198,17 @@ func (p *Processor) InitProject() InitResult {
 	}
 
 	return result
+}
+
+// realPath resolves symlinks when the path exists and falls back to the lexical
+// absolute path for entries that are not on disk yet.
+func realPath(path string) string {
+	if real, err := filepath.EvalSymlinks(path); err == nil {
+		return real
+	}
+	lexical, err := filepath.Abs(path)
+	if err != nil {
+		return filepath.Clean(path)
+	}
+	return filepath.Clean(lexical)
 }

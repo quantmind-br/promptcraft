@@ -152,22 +152,36 @@ func (p *Processor) FindCommandPath(commandName string) (string, error) {
 			if entry.path == "" {
 				return "", apperror.CommandNotFoundError(notFoundMessage(p, commandName))
 			}
-			if isFile(entry.path) {
+
+			// Project precedence must survive a cached hit recorded from the user scope.
+			projectPath := filepath.Join(cwd, ".promptcraft", "commands", commandName+".md")
+			if isFile(projectPath) && withinRoot(projectPath, p.ProjectDir()) {
+				p.pathCache[key] = pathEntry{cachedAt: p.Now(), path: projectPath}
+				return projectPath, nil
+			}
+			if isFile(entry.path) && (withinRoot(entry.path, p.ProjectDir()) || withinRoot(entry.path, p.UserDir())) {
 				return entry.path, nil
 			}
 		}
 	}
 
 	filename := commandName + ".md"
-	searchPaths := []string{
-		filepath.Join(cwd, ".promptcraft", "commands", filename),
-		filepath.Join(home, ".promptcraft", "commands", filename),
+	candidates := []struct {
+		path string
+		root string
+	}{
+		{filepath.Join(cwd, ".promptcraft", "commands", filename), p.ProjectDir()},
+		{filepath.Join(home, ".promptcraft", "commands", filename), p.UserDir()},
 	}
 
-	for _, path := range searchPaths {
-		if isFile(path) {
-			p.pathCache[key] = pathEntry{cachedAt: p.Now(), path: path}
-			return path, nil
+	for _, candidate := range candidates {
+		// A command name must stay inside a template root: values with ../ escape it.
+		if !withinRoot(candidate.path, candidate.root) {
+			continue
+		}
+		if isFile(candidate.path) {
+			p.pathCache[key] = pathEntry{cachedAt: p.Now(), path: candidate.path}
+			return candidate.path, nil
 		}
 	}
 
@@ -186,4 +200,14 @@ func isFile(path string) bool {
 		return false
 	}
 	return !info.IsDir()
+}
+
+// withinRoot reports whether candidate stays inside root once both are cleaned.
+func withinRoot(candidate, root string) bool {
+	cleanCandidate := filepath.Clean(candidate)
+	cleanRoot := filepath.Clean(root)
+	if cleanCandidate == cleanRoot {
+		return false
+	}
+	return strings.HasPrefix(cleanCandidate, cleanRoot+string(os.PathSeparator))
 }
