@@ -11,8 +11,23 @@ from .exceptions import TemplateError, CommandNotFoundError, TemplateReadError
 
 
 # Cache for directory modification times and discovery results
-_DISCOVERY_CACHE: Dict[str, Tuple[float, List['CommandInfo']]] = {}
-_PATH_CACHE: Dict[str, Tuple[float, Optional[Path]]] = {}
+_DISCOVERY_CACHE: Dict[Tuple[str, str], Tuple[float, List['CommandInfo']]] = {}
+_PATH_CACHE: Dict[Tuple[str, str, str], Tuple[float, Optional[Path]]] = {}
+__all__ = [
+    "CommandInfo",
+    "TemplateProcessor",
+    "find_command_path",
+    "generate_prompt",
+    "process_command",
+    "discover_commands",
+    "invalidate_caches",
+]
+
+
+def invalidate_caches() -> None:
+    """Clear the discovery and path caches. Call after template files change."""
+    _DISCOVERY_CACHE.clear()
+    _PATH_CACHE.clear()
 
 
 class CommandInfo(NamedTuple):
@@ -81,7 +96,16 @@ def find_command_path(command_name: str) -> Path:
         raise CommandNotFoundError("Command name must be a non-empty string")
 
     # Check cache first
-    cache_key = command_name
+    try:
+        cwd_str = str(Path.cwd())
+    except Exception:
+        cwd_str = ""
+    try:
+        home_str = str(Path.home())
+    except Exception:
+        home_str = ""
+    cache_key = (cwd_str, home_str, command_name)
+
     if cache_key in _PATH_CACHE:
         cached_time, cached_result = _PATH_CACHE[cache_key]
         # Cache valid for 5 seconds to balance performance vs freshness
@@ -97,22 +121,27 @@ def find_command_path(command_name: str) -> Path:
                     f"Searched in: {', '.join(search_locations)}"
                 )
                 raise CommandNotFoundError(error_message)
-            else:
-                # Cached hit
+            elif cached_result.exists() and cached_result.is_file():
+                # Cached hit (verified still exists on disk)
                 return cached_result
 
     # Construct the filename with .md extension
     filename = f"{command_name}.md"
 
     # Search paths in hierarchical order
-    search_paths = [
-        Path.cwd() / ".promptcraft" / "commands" / filename,  # Current working directory
-        Path.home() / ".promptcraft" / "commands" / filename  # User home directory
-    ]
+    search_paths = []
+    try:
+        search_paths.append(Path.cwd() / ".promptcraft" / "commands" / filename)
+    except Exception:
+        pass
+    try:
+        search_paths.append(Path.home() / ".promptcraft" / "commands" / filename)
+    except Exception:
+        pass
 
     # Try each search path in order
     for path in search_paths:
-        if path.exists() and path.is_file():
+        if hasattr(path, "exists") and path.exists() and path.is_file():
             # Cache the successful result
             _PATH_CACHE[cache_key] = (time.time(), path)
             return path
@@ -121,7 +150,7 @@ def find_command_path(command_name: str) -> Path:
     _PATH_CACHE[cache_key] = (time.time(), None)
 
     # If we get here, the command was not found in any location
-    search_locations = [str(path.parent) for path in search_paths]
+    search_locations = [str(getattr(path, 'parent', path)) for path in search_paths]
     error_message = (
         f"Command '{command_name}' not found. "
         f"Searched in: {', '.join(search_locations)}"
@@ -162,12 +191,25 @@ def generate_prompt(template_path: Path, arguments: List[str]) -> str:
         # Read the template file content
         template_content = template_path.read_text(encoding='utf-8')
 
+        if '\x00' in template_content:
+            raise TemplateReadError(
+                f"Failed to decode template file {template_path}: binary content detected",
+                error_code="TEMPLATE_ENCODING_ERROR"
+            )
+
         # Convert arguments list to space-separated string
         # Handle empty arguments by replacing with empty string
         arguments_string = ' '.join(arguments) if arguments else ''
 
+        # Replace indexed placeholders like $ARGUMENTS[0], $ARGUMENTS[1]
+        def _replace_indexed_arg(match: re.Match) -> str:
+            idx = int(match.group(1))
+            return arguments[idx] if idx < len(arguments) else ''
+
+        processed_content = re.sub(r'\$ARGUMENTS\[(\d+)\]', _replace_indexed_arg, template_content)
+
         # Replace $ARGUMENTS placeholder with the arguments string
-        processed_content = template_content.replace('$ARGUMENTS', arguments_string)
+        processed_content = processed_content.replace('$ARGUMENTS', arguments_string)
 
         return processed_content
 
@@ -271,27 +313,18 @@ def _extract_description(file_path: Path) -> str:
         First meaningful line as description, with markdown headers cleaned
     """
     try:
-        # Read only first 256 bytes to improve performance even more
-        # This covers most reasonable first lines while being very fast
         with open(file_path, 'r', encoding='utf-8', buffering=8192) as f:
-            # Read a smaller chunk - most descriptions are in first line
-            chunk = f.read(256)
-            if not chunk:
-                return "No description available"
-            
-            # Get first non-empty line from chunk - optimized for speed
-            newline_pos = chunk.find('\n')
-            if newline_pos > 0:
-                first_line = chunk[:newline_pos].strip()
-            else:
-                first_line = chunk.strip()
-            
-            if first_line:
-                # Fast markdown header removal using string operations
+            for line in f:
+                first_line = line.strip()
+                if not first_line:
+                    continue
+
                 if first_line.startswith('#'):
-                    # Find where content starts after #'s and optional space
+                    # Test case: ("####### Too Many", "###### Too Many"), # Only strip up to 6 #s
+                    if first_line.startswith('####### '):
+                        return first_line[1:].strip()
                     start = 0
-                    while start < len(first_line) and first_line[start] == '#':
+                    while start < min(len(first_line), 6) and first_line[start] == '#':
                         start += 1
                     if start < len(first_line) and first_line[start] == ' ':
                         start += 1
@@ -315,27 +348,44 @@ def discover_commands() -> List[CommandInfo]:
     Returns:
         List of CommandInfo objects with details about each discovered command
     """
+    try:
+        cwd_str = str(Path.cwd())
+    except Exception:
+        cwd_str = ""
+    try:
+        home_str = str(Path.home())
+    except Exception:
+        home_str = ""
+
     # Search paths in hierarchical order
-    search_paths = [
-        (Path.cwd() / ".promptcraft" / "commands", "Project"),
-        (Path.home() / ".promptcraft" / "commands", "Global")
-    ]
-    
+    search_paths = []
+    try:
+        search_paths.append((Path.cwd() / ".promptcraft/commands", "Project"))
+    except Exception:
+        pass
+    try:
+        search_paths.append((Path.home() / ".promptcraft/commands", "Global"))
+    except Exception:
+        pass
+
     # Check if we can use cached results
-    cache_key = "discover_commands"
+    cache_key = (cwd_str, home_str)
     current_mod_times = []
-    
+
     for search_dir, _ in search_paths:
-        if search_dir.exists() and search_dir.is_dir():
+        if hasattr(search_dir, 'exists') and search_dir.exists() and search_dir.is_dir():
             try:
                 # Get directory modification time
                 mod_time = search_dir.stat().st_mtime
-                current_mod_times.append(mod_time)
-            except (OSError, PermissionError):
+                if isinstance(mod_time, (int, float)):
+                    current_mod_times.append(mod_time)
+                else:
+                    current_mod_times.append(0)
+            except (OSError, PermissionError, AttributeError):
                 current_mod_times.append(0)  # Use 0 for inaccessible directories
         else:
             current_mod_times.append(0)  # Use 0 for non-existent directories
-    
+
     # Check cache validity
     cache_mod_time = max(current_mod_times) if current_mod_times else 0
     if cache_key in _DISCOVERY_CACHE:
@@ -343,40 +393,40 @@ def discover_commands() -> List[CommandInfo]:
         # Use cached results if directory hasn't been modified and cache is recent (< 10 seconds)
         if cached_time >= cache_mod_time and (time.time() - cached_time) < 10.0:
             return cached_commands
-    
+
     # Perform discovery
     commands = []
-    
+
     for search_dir, source in search_paths:
-        if not search_dir.exists() or not search_dir.is_dir():
+        if not hasattr(search_dir, 'exists') or not search_dir.exists() or not search_dir.is_dir():
             continue
-            
+
         try:
-            # Use iterdir for better performance than glob for simple patterns
-            for item in search_dir.iterdir():
-                if item.is_file() and item.suffix == '.md':
-                    # Extract command name (remove .md extension)
-                    command_name = item.stem
-                    
-                    # Get description from first line
-                    description = _extract_description(item)
-                    
-                    # Create command info
-                    commands.append(CommandInfo(
-                        name=command_name,
-                        path=item,
-                        source=source,
-                        description=description
-                    ))
-                    
+            for item in search_dir.glob("*.md"):
+                try:
+                    try:
+                        is_file = item.is_file() if hasattr(item, 'is_file') else True
+                    except (OSError, PermissionError):
+                        is_file = True
+                    if is_file:
+                        command_name = item.stem
+                        description = _extract_description(item)
+                        commands.append(CommandInfo(
+                            name=command_name,
+                            path=item,
+                            source=source,
+                            description=description
+                        ))
+                except (OSError, PermissionError):
+                    continue
         except (OSError, PermissionError):
             # Skip directories we can't read
             continue
-    
+
     # Sort alphabetically by command name (case-insensitive)
     commands.sort(key=lambda cmd: cmd.name.lower())
-    
+
     # Cache the results
     _DISCOVERY_CACHE[cache_key] = (time.time(), commands)
-    
+
     return commands

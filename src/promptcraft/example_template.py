@@ -1,4 +1,6 @@
-# Exemplo de Template do PromptCraft
+"""Shared example template content used by ``--init`` and the TUI init action."""
+
+EXAMPLE_TEMPLATE = """# Exemplo de Template do PromptCraft
 
 Este é um exemplo de template demonstrando como usar o sistema de argumentos do PromptCraft.
 
@@ -20,3 +22,4 @@ Você solicitou: $ARGUMENTS
 1. Edite este arquivo para criar seu próprio template
 2. Crie novos arquivos .md neste diretório para novos comandos
 3. Use `promptcraft nome_do_arquivo argumentos` para executar seus templates
+"""

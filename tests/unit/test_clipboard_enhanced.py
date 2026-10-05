@@ -379,6 +379,10 @@ class TestStdoutFlagIntegration:
 class TestClipboardTimeoutAndPerformance:
     """Test clipboard timeout and performance requirements."""
 
+    def setup_method(self):
+        """Set up test fixtures."""
+        self.runner = CliRunner()
+
     @patch('promptcraft.main.pyperclip.copy')
     @patch('promptcraft.main._is_headless_environment')
     def test_clipboard_timeout_enforcement(self, mock_headless, mock_pyperclip):
@@ -536,7 +540,7 @@ class TestClipboardRegressionAndCompatibility:
             # Manual disable
             ({'PROMPTCRAFT_NO_CLIPBOARD': 'true'}, True),
             # SSH session without X11
-            ({'SSH_CLIENT': '192.168.1.1 12345 22', 'DISPLAY': None}, True),
+            ({'SSH_CLIENT': '192.168.1.1 12345 22'}, True),
         ]
 
         for env_vars, expected_headless in environment_tests:

@@ -1103,3 +1103,28 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 ## Support
 
 For questions and support, please open an issue on GitHub.
+## Interactive terminal UI (TUI)
+
+Running `promptcraft` with no arguments in an interactive terminal opens an
+interactive interface (Textual) instead of an error:
+
+- **Home** — list of templates from `.promptcraft/commands/` (project) and
+  `~/.promptcraft/commands/` (user), project wins on name conflicts, with the
+  first line of each `.md` shown as the description. Keys: `r`/`Enter` run,
+  `n` new, `e` edit, `d` delete (press twice to confirm), `i` init,
+  `v` version, `f` refresh, `?` help, `q` quit.
+- **Run** — form with the arguments for `$ARGUMENTS`. The result is copied to
+  the clipboard by default (`Enter`/`s`), with clear success / failure
+  feedback (press `d` to view it on screen as `Result`).
+- **Create / edit** — writes the template to the chosen scope (project or
+  user), warning before overwriting an existing one (`Ctrl+S` to confirm).
+  Editing a template to another name or scope moves it there (the original
+  file is removed), so a project template can become a user template.
+  Templates can also be deleted directly while editing (`Ctrl+D` / button).
+- **Init** — idempotent project initialization (never overwrites templates).
+- All shortcuts stay visible in the footer; every action gives clear feedback.
+
+All other CLI invocations (`--init`, `--list`, `--stdout`, `--version`,
+`--help`, direct template execution) behave exactly as before. Textual is
+imported lazily, only when the TUI is launched, so CLI cold start is
+unaffected.

@@ -1,7 +1,7 @@
 """Unit tests for the PromptCraft CLI main module."""
 
 import pytest
-from unittest.mock import Mock, patch, call
+from unittest.mock import Mock, patch, call, MagicMock
 from click.testing import CliRunner
 import os
 import time
@@ -673,7 +673,7 @@ class TestInitializationFunctionality:
     def test_init_flag_presence_and_parameter_parsing(self, mock_path):
         """Test --init flag is properly parsed by Click framework."""
         # Arrange
-        mock_commands_dir = Mock()
+        mock_commands_dir = MagicMock()
         mock_exemplo_file = Mock()
         mock_path.return_value = mock_commands_dir
         mock_commands_dir.__truediv__.return_value = mock_exemplo_file
@@ -693,7 +693,7 @@ class TestInitializationFunctionality:
     def test_directory_creation_in_empty_directory(self, mock_path):
         """Test directory creation in empty directory."""
         # Arrange
-        mock_commands_dir = Mock()
+        mock_commands_dir = MagicMock()
         mock_exemplo_file = Mock()
         mock_path.return_value = mock_commands_dir
         mock_commands_dir.__truediv__.return_value = mock_exemplo_file
@@ -715,7 +715,7 @@ class TestInitializationFunctionality:
     def test_graceful_handling_when_directories_already_exist(self, mock_path):
         """Test graceful handling when directories already exist."""
         # Arrange
-        mock_commands_dir = Mock()
+        mock_commands_dir = MagicMock()
         mock_exemplo_file = Mock()
         mock_path.return_value = mock_commands_dir
         mock_commands_dir.__truediv__.return_value = mock_exemplo_file
@@ -737,7 +737,7 @@ class TestInitializationFunctionality:
     def test_example_template_file_creation_and_content(self, mock_path):
         """Test example template file creation and content."""
         # Arrange
-        mock_commands_dir = Mock()
+        mock_commands_dir = MagicMock()
         mock_path.return_value = mock_commands_dir
         mock_commands_dir.mkdir = Mock()
         mock_commands_dir.exists.return_value = True
@@ -762,7 +762,7 @@ class TestInitializationFunctionality:
     def test_success_messaging_and_output_formatting(self, mock_path):
         """Test success message with green formatting using click.secho."""
         # Arrange
-        mock_commands_dir = Mock()
+        mock_commands_dir = MagicMock()
         mock_path.return_value = mock_commands_dir
         mock_commands_dir.mkdir = Mock()
         mock_commands_dir.exists.return_value = True
@@ -784,7 +784,7 @@ class TestInitializationFunctionality:
     def test_helpful_next_steps_in_output_message(self, mock_path):
         """Test helpful next steps in output message."""
         # Arrange
-        mock_commands_dir = Mock()
+        mock_commands_dir = MagicMock()
         mock_path.return_value = mock_commands_dir
         mock_commands_dir.mkdir = Mock()
         mock_commands_dir.exists.return_value = True
@@ -806,7 +806,7 @@ class TestInitializationFunctionality:
     def test_information_about_created_files_and_directories(self, mock_path):
         """Test information about created files and directories."""
         # Arrange
-        mock_commands_dir = Mock()
+        mock_commands_dir = MagicMock()
         mock_path.return_value = mock_commands_dir
         mock_commands_dir.mkdir = Mock()
         mock_commands_dir.exists.return_value = True
@@ -826,7 +826,7 @@ class TestInitializationFunctionality:
     def test_error_handling_for_permission_issues(self, mock_path):
         """Test error handling for permission issues."""
         # Arrange
-        mock_commands_dir = Mock()
+        mock_commands_dir = MagicMock()
         mock_path.return_value = mock_commands_dir
         mock_commands_dir.mkdir.side_effect = PermissionError("Permission denied")
         
@@ -842,7 +842,7 @@ class TestInitializationFunctionality:
     def test_error_handling_for_os_errors(self, mock_path):
         """Test error handling for OS errors."""
         # Arrange
-        mock_commands_dir = Mock()
+        mock_commands_dir = MagicMock()
         mock_path.return_value = mock_commands_dir
         mock_commands_dir.mkdir.side_effect = OSError("Disk full")
         
@@ -858,7 +858,7 @@ class TestInitializationFunctionality:
         # Test that --init doesn't interfere with normal operations
         # First test --init works
         with patch('promptcraft.main.Path') as mock_path:
-            mock_commands_dir = Mock()
+            mock_commands_dir = MagicMock()
             mock_path.return_value = mock_commands_dir
             mock_commands_dir.mkdir = Mock()
             mock_commands_dir.exists.return_value = True
@@ -891,7 +891,7 @@ class TestInitializationFunctionality:
     def test_command_name_not_required_when_initializing(self):
         """Test command name is not required when using --init flag."""
         with patch('promptcraft.main.Path') as mock_path:
-            mock_commands_dir = Mock()
+            mock_commands_dir = MagicMock()
             mock_path.return_value = mock_commands_dir
             mock_commands_dir.mkdir = Mock()
             mock_commands_dir.exists.return_value = True
@@ -920,7 +920,7 @@ class TestInitializationFunctionality:
     def test_cross_platform_compatibility_for_file_operations(self, mock_path):
         """Test cross-platform compatibility for file operations."""
         # Arrange
-        mock_commands_dir = Mock()
+        mock_commands_dir = MagicMock()
         mock_path.return_value = mock_commands_dir
         mock_commands_dir.mkdir = Mock()
         mock_commands_dir.exists.return_value = True
@@ -945,7 +945,7 @@ class TestInitializationFunctionality:
     def test_arguments_usage_demonstration_in_example_template(self, mock_path):
         """Test $ARGUMENTS usage demonstration in example template."""
         # Arrange
-        mock_commands_dir = Mock()
+        mock_commands_dir = MagicMock()
         mock_path.return_value = mock_commands_dir
         mock_commands_dir.mkdir = Mock()
         mock_commands_dir.exists.return_value = True
@@ -969,7 +969,7 @@ class TestInitializationFunctionality:
     def test_practical_examples_and_guidance_in_template(self, mock_path):
         """Test practical examples and guidance in example template."""
         # Arrange
-        mock_commands_dir = Mock()
+        mock_commands_dir = MagicMock()
         mock_path.return_value = mock_commands_dir
         mock_commands_dir.mkdir = Mock()
         mock_commands_dir.exists.return_value = True

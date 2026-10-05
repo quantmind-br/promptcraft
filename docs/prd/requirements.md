@@ -28,8 +28,7 @@
 
 2. **NFR2:** The system must work identically across Windows, macOS, and Linux platforms
 
-3. **NFR3:** The application must have minimal dependencies (only click, pyperclip as production dependencies)
-
+3. **NFR3:** The application must have minimal dependencies (click, pyperclip and textual as production dependencies; textual is imported lazily only when the interactive TUI is launched in a TTY so cold-start benchmarks are unaffected)
 4. **NFR4:** The system must never crash with unhandled exceptions - all errors must be caught and presented as user-friendly messages
 
 5. **NFR5:** Code must follow PEP 8 standards with comprehensive docstrings for all functions and classes
@@ -39,4 +38,4 @@
 7. **NFR7:** Memory footprint must remain minimal with no persistent processes or background services
 
 8. **NFR8:** The system must provide 95%+ test coverage across all core functionality
-
+

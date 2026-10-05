@@ -9,6 +9,7 @@ import subprocess
 import statistics
 import json
 import time
+import sys
 from pathlib import Path
 from typing import Dict, Any, List
 
@@ -34,7 +35,7 @@ class TestPerformanceRegression:
         def cold_start_execution():
             """Execute cold start for regression testing."""
             result = subprocess.run(
-                ["python", "-m", "promptcraft", "regression-cold", "test", "--stdout"],
+                [sys.executable, "-m", "promptcraft", "regression-cold", "test", "--stdout"],
                 capture_output=True,
                 text=True,
                 timeout=10.0

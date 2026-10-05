@@ -191,7 +191,7 @@ class TestFileReadingAndContentProcessing:
             template_path = Path(tmpdir) / "encoding-test.md"
             
             # Test UTF-8 (default)
-            utf8_content = "# UTF-8 Template\n\nContent with émojis: 🚀 and Unicode: 测试"
+            utf8_content = "# UTF-8 Template\n\nContent with émojis: 🚀 and Unicode: 测试\n\n$ARGUMENTS"
             template_path.write_text(utf8_content, encoding='utf-8')
             
             result = generate_prompt(template_path, ["utf8", "test"])

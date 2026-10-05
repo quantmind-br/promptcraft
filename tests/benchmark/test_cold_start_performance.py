@@ -7,6 +7,7 @@ of <150ms for initial command execution on standard hardware.
 import subprocess
 import pytest
 import time
+import sys
 from pathlib import Path
 
 
@@ -32,7 +33,7 @@ class TestColdStartPerformance:
         def execute_cold_start():
             """Execute a cold start command."""
             result = subprocess.run(
-                ["python", "-m", "promptcraft", "bench-cold", "test", "--stdout"],
+                [sys.executable, "-m", "promptcraft", "bench-cold", "test", "--stdout"],
                 capture_output=True,
                 text=True,
                 timeout=5.0
@@ -66,7 +67,7 @@ class TestColdStartPerformance:
         def execute_consistent_cold_start():
             """Execute cold start for consistency testing."""
             result = subprocess.run(
-                ["python", "-m", "promptcraft", "bench-consistency", "consistent", "--stdout"],
+                [sys.executable, "-m", "promptcraft", "bench-consistency", "consistent", "--stdout"],
                 capture_output=True,
                 text=True,
                 timeout=5.0
@@ -89,22 +90,21 @@ class TestColdStartPerformance:
         """
         def import_promptcraft_modules():
             """Import PromptCraft modules and measure time."""
-            import importlib
             import sys
             
-            # Clear any existing imports to simulate cold start
-            modules_to_clear = [name for name in sys.modules.keys() 
-                              if name.startswith('promptcraft')]
-            for module_name in modules_to_clear:
-                if module_name in sys.modules:
-                    del sys.modules[module_name]
+            # Clear any existing imports to simulate cold start, preserving originals
+            saved_modules = {name: mod for name, mod in sys.modules.items() if name.startswith('promptcraft')}
+            for name in list(saved_modules.keys()):
+                sys.modules.pop(name, None)
             
-            # Now import the main module (this triggers lazy loading pattern)
-            import promptcraft.main
-            import promptcraft.core
-            import promptcraft.exceptions
-            
-            return True
+            try:
+                # Now import the main module (this triggers lazy loading pattern)
+                import promptcraft.main
+                import promptcraft.core
+                import promptcraft.exceptions
+                return True
+            finally:
+                sys.modules.update(saved_modules)
         
         result = benchmark(import_promptcraft_modules)
         assert result is True
@@ -132,7 +132,7 @@ class TestColdStartPerformance:
         
         def execute_with_args():
             result = subprocess.run(
-                ["python", "-m", "promptcraft", template_name] + args + ["--stdout"],
+                [sys.executable, "-m", "promptcraft", template_name] + args + ["--stdout"],
                 capture_output=True,
                 text=True,
                 timeout=5.0

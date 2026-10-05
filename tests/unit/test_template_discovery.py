@@ -221,10 +221,10 @@ class TestDescriptionExtraction:
             
             # Header with special Unicode characters
             unicode_file = Path(tmpdir) / "unicode.md"
-            unicode_file.write_text("# \u6f22\u5b57 with \u00e9m\u00f4j\u00ee\ud83d\ude0a\n\nContent.")
+            unicode_file.write_text("# \u6f22\u5b57 with \u00e9m\u00f4j\u00ee\U0001f60a\n\nContent.")
             
             result = _extract_description(unicode_file)
-            assert result == "\u6f22\u5b57 with \u00e9m\u00f4j\u00ee\ud83d\ude0a"
+            assert result == "\u6f22\u5b57 with \u00e9m\u00f4j\u00ee\U0001f60a"
 
     def test_extract_description_error_recovery(self):
         """Test description extraction error recovery."""
