@@ -84,6 +84,20 @@ Init / version / help
 """
 
 
+def _copy_feedback(route: str, name: str, chars: int) -> tuple[str, str]:
+    """Status line and toast for a successful copy.
+
+    OSC 52 writes are never acknowledged by the terminal, so they are
+    reported as sent rather than copied.
+    """
+    if route == actions.CLIPBOARD_OSC52:
+        return (
+            f"✓ Sent to clipboard via terminal (OSC 52, {chars} chars).",
+            f"/{name} sent to clipboard (OSC 52)",
+        )
+    return f"✓ Copied to clipboard ({chars} chars).", f"/{name} copied to clipboard"
+
+
 class HomeScreen(Screen):
     """Template list with the main TUI actions."""
 
@@ -383,17 +397,12 @@ class RunScreen(Screen):
         result = self._run()
         if result is None:
             return
-        if actions.copy_to_clipboard(result, self.template.name):
+        route = actions.copy_to_clipboard(result, osc52_writer=self.app.copy_to_clipboard)
+        if route:
             self.copied_result = result
-            self._set_status(
-                f"✓ Copied to clipboard ({len(result)} chars). "
-                "Press d to view it on screen, Esc to go back.",
-            )
-            self.notify(
-                f"/{self.template.name} copied to clipboard",
-                severity="information",
-                markup=False,
-            )
+            status, toast = _copy_feedback(route, self.template.name, len(result))
+            self._set_status(f"{status} Press d to view it on screen, Esc to go back.")
+            self.notify(toast, severity="information", markup=False)
         else:
             self._set_status(
                 "✗ Could not copy to the clipboard. Press d to view the text on "
@@ -454,13 +463,15 @@ class ResultScreen(Screen):
 
     def action_copy(self) -> None:
         status = self.query_one("#status", Static)
-        if actions.copy_to_clipboard(self.result_content, self.template_name):
-            status.update(Content(f"✓ Copied to clipboard ({len(self.result_content)} chars)."))
-            self.notify(
-                f"/{self.template_name} copied to clipboard",
-                severity="information",
-                markup=False,
+        route = actions.copy_to_clipboard(
+            self.result_content, osc52_writer=self.app.copy_to_clipboard
+        )
+        if route:
+            message, toast = _copy_feedback(
+                route, self.template_name, len(self.result_content)
             )
+            status.update(Content(message))
+            self.notify(toast, severity="information", markup=False)
         else:
             status.update(
                 Content(

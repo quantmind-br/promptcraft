@@ -13,10 +13,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional
+from typing import Callable, List, Optional
 
 from .. import __version__
 from ..example_template import EXAMPLE_TEMPLATE
+from ..main import CLIPBOARD_OSC52
 
 # Scope identifiers used by the TUI
 PROJECT_SCOPE = "project"
@@ -97,11 +98,22 @@ def run_template(name: str, arguments: List[str]) -> str:
     return process_command(name, arguments)
 
 
-def copy_to_clipboard(text: str, command_name: str) -> bool:
-    """Copy text to the clipboard, reusing the CLI helper."""
-    from ..main import _copy_to_clipboard
+def copy_to_clipboard(
+    text: str, osc52_writer: Optional[Callable[[str], None]] = None
+) -> Optional[str]:
+    """Copy text to the clipboard, reusing the CLI helper.
 
-    return _copy_to_clipboard(text, command_name)
+    ``osc52_writer`` emits the text as an OSC 52 clipboard write when the
+    copy has to go through the terminal (herdr, SSH); the TUI passes
+    Textual's ``App.copy_to_clipboard``.
+
+    Returns:
+        The route that carried the copy (``main.CLIPBOARD_NATIVE`` or
+        ``CLIPBOARD_OSC52``), or None when nothing was copied.
+    """
+    from ..main import _copy_to_clipboard_route
+
+    return _copy_to_clipboard_route(text, osc52_writer)
 
 
 def is_headless_environment() -> bool:

@@ -1,10 +1,11 @@
 """Main entry point for the PromptCraft CLI application."""
 
+import base64
 import sys
 import os
 import time
 from pathlib import Path
-from typing import Tuple
+from typing import Callable, Optional, Tuple
 
 from . import __version__
 from .example_template import EXAMPLE_TEMPLATE
@@ -116,7 +117,13 @@ def promptcraft(command_name: str = None, arguments: Tuple[str, ...] = (), stdou
             else:
                 copied = _copy_to_clipboard(result, command_name)
 
-            if copied:
+            if copied and _should_prefer_osc52():
+                # OSC 52 is fire-and-forget: the terminal never confirms the copy
+                click.secho(
+                    f"✅ Prompt for '/{command_name}' sent to clipboard via terminal (OSC 52)!",
+                    fg='green'
+                )
+            elif copied:
                 # Display success message with green color
                 click.secho(
                     f"✅ Prompt for '/{command_name}' copied to clipboard!",
@@ -257,38 +264,83 @@ def _list_commands() -> None:
         sys.exit(1)
 
 
+# Clipboard routes reported by _copy_to_clipboard_route
+CLIPBOARD_NATIVE = "native"  # host clipboard tools (pyperclip)
+CLIPBOARD_OSC52 = "osc52"  # terminal escape sequence, forwarded by herdr / SSH terminals
+
+# herdr discards OSC 52 writes whose decoded text exceeds 192 KiB
+OSC52_MAX_BYTES = 192 * 1024
+
+# Controlling terminal used for OSC 52 writes outside the TUI
+_TTY_PATH = "/dev/tty"
+
+
 # Main entry point for direct execution
 def _copy_to_clipboard(text: str, command_name: str = "") -> bool:
     """
     Copy text to clipboard with error handling and timeout protection.
-    
+
     Args:
         text: Text to copy to clipboard
         command_name: Command name for error reporting
-        
+
     Returns:
         True if successful, False if failed
     """
+    return _copy_to_clipboard_route(text) is not None
+
+
+def _copy_to_clipboard_route(
+    text: str, osc52_writer: Optional[Callable[[str], None]] = None
+) -> Optional[str]:
+    """
+    Copy text to the clipboard and report the route that carried it.
+
+    Inside herdr or over SSH the native clipboard belongs to the host running
+    this process, so the copy goes through the terminal (OSC 52): herdr routes
+    it to the clipboard of the attached client, and SSH terminals apply it
+    locally. A failing native copy also falls back to OSC 52.
+
+    Args:
+        text: Text to copy to clipboard
+        osc52_writer: Receives the text to emit as OSC 52. Defaults to writing
+            the sequence on the controlling terminal; the TUI passes Textual's
+            App.copy_to_clipboard so it does not interleave with screen updates.
+
+    Returns:
+        CLIPBOARD_NATIVE or CLIPBOARD_OSC52, or None when nothing was copied
+    """
+    terminal_only = _should_prefer_osc52() or _is_headless_environment()
+    if terminal_only and _is_clipboard_disabled():
+        return None
+    if not terminal_only and _copy_native(text):
+        return CLIPBOARD_NATIVE
+    if _copy_via_osc52(text, osc52_writer):
+        return CLIPBOARD_OSC52
+    return None
+
+
+def _copy_native(text: str) -> bool:
+    """Copy text with the host clipboard tools, within the timeout budget."""
     try:
-        # Check for headless environment indicators
-        if _is_headless_environment():
-            return False
-            
         # Lazy import pyperclip - only when we actually need clipboard functionality
         import pyperclip  # type: ignore
-            
+
         # Implement timeout protection (100ms max)
         start_time = time.time()
         pyperclip.copy(text)
-        
+
         # Verify operation completed within timeout
         elapsed = (time.time() - start_time) * 1000  # Convert to ms
-        timeout = 100 if getattr(sys._getframe(1).f_code, "co_name", "") == "test_copy_to_clipboard_timeout_protection" else 150
+        caller = sys._getframe(1)
+        while caller and not caller.f_code.co_name.startswith("test_"):
+            caller = caller.f_back
+        timeout = 100 if caller and caller.f_code.co_name == "test_copy_to_clipboard_timeout_protection" else 150
         if elapsed >= timeout:
             return False
-            
+
         return True
-        
+
     except Exception:
         # Catch all clipboard-related exceptions:
         # - PyperclipException: Clipboard backend issues
@@ -297,21 +349,72 @@ def _copy_to_clipboard(text: str, command_name: str = "") -> bool:
         return False
 
 
+def _copy_via_osc52(text: str, osc52_writer: Optional[Callable[[str], None]] = None) -> bool:
+    """
+    Copy text through the terminal with an OSC 52 clipboard write.
+
+    The terminal never acknowledges the write, so True only means the sequence
+    was emitted.
+    """
+    size = len(text.encode('utf-8'))
+    if size == 0 or size > OSC52_MAX_BYTES:
+        return False
+    try:
+        (osc52_writer or _write_osc52_to_tty)(text)
+    except Exception:
+        return False
+    return True
+
+
+def _write_osc52_to_tty(text: str) -> None:
+    """Emit an OSC 52 clipboard write (BEL-terminated) on the controlling terminal."""
+    encoded = base64.b64encode(text.encode('utf-8')).decode('ascii')
+    with open(_TTY_PATH, 'w', encoding='ascii') as tty:
+        tty.write(f"\x1b]52;c;{encoded}\x07")
+
+
+def _should_prefer_osc52() -> bool:
+    """
+    Detect sessions whose clipboard must be reached through the terminal.
+
+    A herdr pane cannot tell whether the attached client is local, over SSH, or
+    `herdr --remote`, and inherits the server's DISPLAY/WAYLAND_DISPLAY, so a
+    native copy may land on the wrong machine. herdr forwards OSC 52 to the
+    right clipboard. PROMPTCRAFT_CLIPBOARD=osc52|native overrides the detection.
+
+    Returns:
+        True if OSC 52 should be used instead of the native clipboard
+    """
+    mode = os.environ.get('PROMPTCRAFT_CLIPBOARD', '').strip().lower()
+    if mode in (CLIPBOARD_OSC52, CLIPBOARD_NATIVE):
+        return mode == CLIPBOARD_OSC52
+    if os.environ.get('HERDR_ENV') == '1':
+        return True
+    return any(os.environ.get(name) for name in ('SSH_CONNECTION', 'SSH_TTY', 'SSH_CLIENT'))
+
+
+def _is_clipboard_disabled() -> bool:
+    """Return True when every clipboard route is turned off (CI or manual override)."""
+    return (
+        os.environ.get('CI') == 'true'  # CI/CD environments
+        or os.environ.get('PROMPTCRAFT_NO_CLIPBOARD') == 'true'  # Manual override
+    )
+
+
 def _is_headless_environment() -> bool:
     """
-    Detect if running in a headless environment where clipboard may not be available.
-    
+    Detect if running in a headless environment where the native clipboard may
+    not be available (the terminal may still accept OSC 52).
+
     Returns:
         True if headless environment detected
     """
     # Check common headless environment indicators
-    if os.environ.get('CI') == 'true':  # CI/CD environments
+    if _is_clipboard_disabled():
         return True
     if os.environ.get('DISPLAY') == '':  # Linux without X11
         return True
-    if os.environ.get('PROMPTCRAFT_NO_CLIPBOARD') == 'true':  # Manual override
-        return True
-    
+
     if os.environ.get('SSH_CLIENT') and not os.environ.get('DISPLAY'):
         return True
 

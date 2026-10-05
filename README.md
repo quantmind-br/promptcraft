@@ -656,14 +656,27 @@ Sprint planning meeting template
 promptcraft my-template
 # Output: Clipboard unavailable, use --stdout instead
 
-# Solution 1: Use --stdout flag
+# Solution: Use --stdout flag
 promptcraft my-template --stdout
-
-# Solution 2: Set up X11 forwarding (Linux/macOS remote)
-ssh -X user@remote-host
-export DISPLAY=:0
-promptcraft my-template
 ```
+
+**Clipboard over SSH and inside herdr (OSC 52)**
+
+Inside a [herdr](https://herdr.dev) pane (`HERDR_ENV=1`) or an SSH session, and
+whenever the native clipboard is unavailable, PromptCraft copies through the
+terminal with an OSC 52 escape sequence instead of the host clipboard tools.
+herdr forwards it to the clipboard of the attached client (local, `ssh` +
+`herdr`, or `herdr --remote`); over plain SSH your local terminal applies it.
+Success is reported as "sent to clipboard via terminal (OSC 52)" because
+terminals never confirm the write.
+
+- Your local terminal must accept OSC 52 writes (Ghostty, kitty, WezTerm, foot,
+  Alacritty, Windows Terminal; iTerm2 needs clipboard access enabled). GNOME
+  Terminal and macOS Terminal.app do not support it.
+- Through tmux, enable `set -g set-clipboard on`.
+- Text above 192 KiB is not sent (herdr's limit); use `--stdout`.
+- Override the detection with `PROMPTCRAFT_CLIPBOARD=osc52` or
+  `PROMPTCRAFT_CLIPBOARD=native`.
 
 **Issue**: Clipboard access denied on Linux
 ```bash

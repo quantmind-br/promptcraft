@@ -153,7 +153,7 @@ class TestHomeScreen:
 class TestRunScreen:
     def test_run_copies_to_clipboard_when_available(self, isolated_env):
         async def scenario(app, pilot):
-            with patch("promptcraft.main._copy_to_clipboard", return_value=True):
+            with patch("promptcraft.main._copy_to_clipboard_route", return_value="native"):
                 await pilot.press("down")  # highlight alpha
                 await _settle(pilot)
                 await pilot.press("r")
@@ -164,6 +164,43 @@ class TestRunScreen:
                 await _settle(pilot)
             status = str(app.screen.query_one("#status").content)
             assert "Copied to clipboard" in status
+
+        run_app(scenario)
+
+    def test_run_inside_herdr_copies_through_textual_osc52(self, isolated_env, monkeypatch):
+        monkeypatch.delenv("PROMPTCRAFT_NO_CLIPBOARD")
+        monkeypatch.delenv("CI", raising=False)
+        monkeypatch.setenv("HERDR_ENV", "1")
+
+        async def scenario(app, pilot):
+            with patch("promptcraft.main.pyperclip.copy") as native_copy:
+                await pilot.press("down")
+                await _settle(pilot)
+                await pilot.press("r")
+                await _settle(pilot)
+                await _type(pilot, "hello world")
+                await pilot.press("enter")
+                await _settle(pilot)
+            native_copy.assert_not_called()
+            assert app.clipboard == "# Alpha project\nA: hello world\n"
+            status = str(app.screen.query_one("#status").content)
+            assert status.startswith("✓ Sent to clipboard via terminal (OSC 52")
+
+        run_app(scenario)
+
+    def test_result_copy_inside_herdr_reports_osc52(self, isolated_env, monkeypatch):
+        monkeypatch.delenv("PROMPTCRAFT_NO_CLIPBOARD")
+        monkeypatch.delenv("CI", raising=False)
+        monkeypatch.setenv("HERDR_ENV", "1")
+
+        async def scenario(app, pilot):
+            app.push_screen(ResultScreen("alpha", "A: hello world\n", copied=False))
+            await _settle(pilot)
+            await pilot.press("c")
+            await _settle(pilot)
+            assert app.clipboard == "A: hello world\n"
+            status = str(app.screen.query_one("#status").content)
+            assert "OSC 52" in status
 
         run_app(scenario)
 
@@ -216,7 +253,7 @@ class TestRunScreen:
             assert status.startswith("✗")  # headless clipboard
             assert "--stdout" in status
 
-            with patch("promptcraft.main._copy_to_clipboard", return_value=True):
+            with patch("promptcraft.main._copy_to_clipboard_route", return_value="native"):
                 await pilot.press("c")
                 await _settle(pilot)
             status = str(app.screen.query_one("#status").content)
@@ -278,7 +315,7 @@ class TestRunScreen:
             await pilot.press("q")
             await _settle(pilot)
             # "copy to clipboard" button (mocked success)
-            with patch("promptcraft.main._copy_to_clipboard", return_value=True):
+            with patch("promptcraft.main._copy_to_clipboard_route", return_value="native"):
                 app.screen.action_copy()  # same handler as the copy button
                 await _settle(pilot)
             status = str(app.screen.query_one("#status").content)
@@ -981,7 +1018,7 @@ class TestOcrCycle1Regressions:
         from unittest.mock import patch as _patch
 
         async def scenario(app, pilot):
-            with _patch("promptcraft.main._copy_to_clipboard", return_value=True):
+            with _patch("promptcraft.main._copy_to_clipboard_route", return_value="native"):
                 await pilot.press("down")
                 await _settle(pilot)
                 await pilot.press("r")
@@ -1167,7 +1204,7 @@ class TestOcrCycle4Regressions:
         from unittest.mock import patch as _patch
 
         async def scenario(app, pilot):
-            with _patch("promptcraft.main._copy_to_clipboard", return_value=True):
+            with _patch("promptcraft.main._copy_to_clipboard_route", return_value="native"):
                 await pilot.press("down")
                 await _settle(pilot)
                 await pilot.press("r")

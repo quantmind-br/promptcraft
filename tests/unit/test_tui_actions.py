@@ -351,21 +351,31 @@ class TestNameValidation:
 
 
 class TestClipboardAndVersion:
-    def test_headless_environment_returns_false(self, monkeypatch):
+    def test_headless_environment_returns_none(self, monkeypatch):
         monkeypatch.setenv("PROMPTCRAFT_NO_CLIPBOARD", "true")
-        assert actions.copy_to_clipboard("anything", "cmd") is False
+        assert actions.copy_to_clipboard("anything") is None
         assert actions.is_headless_environment() is True
 
     def test_reuses_cli_copy_helper(self, monkeypatch):
         calls = []
 
-        def fake_copy(text, command_name):
-            calls.append((text, command_name))
-            return True
+        def fake_route(text, osc52_writer):
+            calls.append((text, osc52_writer))
+            return "native"
 
-        monkeypatch.setattr("promptcraft.main._copy_to_clipboard", fake_copy)
-        assert actions.copy_to_clipboard("hello", "cmd") is True
-        assert calls == [("hello", "cmd")]
+        writer = lambda text: None  # noqa: E731
+        monkeypatch.setattr("promptcraft.main._copy_to_clipboard_route", fake_route)
+        assert actions.copy_to_clipboard("hello", osc52_writer=writer) == "native"
+        assert calls == [("hello", writer)]
+
+    def test_osc52_route_uses_given_writer(self, monkeypatch):
+        monkeypatch.delenv("CI", raising=False)
+        monkeypatch.delenv("PROMPTCRAFT_NO_CLIPBOARD", raising=False)
+        monkeypatch.setenv("HERDR_ENV", "1")
+        written = []
+        route = actions.copy_to_clipboard("hello", osc52_writer=written.append)
+        assert route == actions.CLIPBOARD_OSC52
+        assert written == ["hello"]
 
     def test_version_matches_package(self):
         assert actions.get_version() == __version__
