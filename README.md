@@ -1,1175 +1,178 @@
-# PromptCraft CLI
+# PromptCraft
 
-A command-line tool for managing prompt templates efficiently.
+Reusable Markdown prompts, a fast CLI and a keyboard-first terminal workspace.
+PromptCraft is a standalone Go application: no interpreter, virtual environment or background service is needed.
 
-## Description
+## Install
 
-PromptCraft CLI is a powerful command-line interface tool designed to help developers and content creators manage, organize, and utilize prompt templates effectively. Whether you're working with AI models, documentation templates, or any form of structured content, PromptCraft streamlines your workflow.
+Requires **Go 1.24.2 or newer** to build. The compiled binary runs on Linux, macOS and Windows.
 
-## Features
-
-- Template management and organization
-- Command-line interface for efficient workflow integration
-- Clipboard operations for quick template access
-- Extensible architecture for custom template processing
-
-## Installation
-
-### Go binary (recommended)
-
-The primary implementation is the Go port: a single binary with the cobra CLI and
-the Bubble Tea interface. It needs no runtime dependencies, and copies go through
-the host clipboard tools or an OSC 52 write when running inside herdr or over SSH.
-
-```bash
+```sh
 go install github.com/quantmind-br/promptcraft/cmd/promptcraft@latest
 ```
 
-From a clone of this repository:
+Or build from the repository:
 
-```bash
+```sh
+git clone https://github.com/quantmind-br/promptcraft.git
+cd promptcraft
+make install
+```
+
+`make install` installs or updates `~/.local/bin/promptcraft`. Add that directory to `PATH`, or choose another destination:
+
+```sh
+make install BIN_DIR=/usr/local/bin
+make uninstall
+```
+
+Without Make (including Windows):
+
+```sh
 go build -o promptcraft ./cmd/promptcraft
-./promptcraft --help
+# Windows: go build -o promptcraft.exe ./cmd/promptcraft
 ```
 
-The Python package under `legacy/python/` is frozen as the parity reference for
-the port; it receives no new features.
+## Quick start
 
-### System Requirements
-
-- **Python:** 3.10 or higher
-- **Operating Systems:** Windows, macOS, Linux
-- **pipx:** Python application installer (<https://pipx.pypa.io>), or **pip** if you prefer a virtual environment
-
-### Legacy Python installation (pipx)
-
-pipx installs the legacy Python implementation: it gives PromptCraft its own virtual environment and puts the `promptcraft` command on your PATH, with no dependency conflicts.
-
-```bash
-# Install pipx if you don't have it (Python 3.10+)
-python -m pip install pipx
-python -m pipx ensurepath
-
-# Clone the repository
-git clone https://github.com/promptcraft/promptcraft.git
-cd promptcraft
-
-# Install the CLI into its own virtual environment
-pipx install .
-```
-
-Note: on Linux, the clipboard features also require `xclip` or `xsel` to be installed.
-
-### Alternative: pip in a Virtual Environment
-
-If you prefer a manually managed virtual environment (e.g. to work with the source frequently), install with pip inside a venv:
-
-```bash
-# Create a virtual environment
-python -m venv promptcraft-env
-
-# Activate the virtual environment
-# On Windows:
-promptcraft-env\Scripts\activate
-# On macOS/Linux:
-source promptcraft-env/bin/activate
-
-# Clone and install
-git clone https://github.com/promptcraft/promptcraft.git
-cd promptcraft
-pip install .
-```
-
-### Development Installation
-
-For developers who want to contribute or modify the code:
-
-```bash
-# Clone the repository
-git clone https://github.com/promptcraft/promptcraft.git
-cd promptcraft
-
-# Create and activate virtual environment
-python -m venv venv
-# On Windows:
-venv\Scripts\activate
-# On macOS/Linux:
-source venv/bin/activate
-
-# Install in editable mode with development dependencies
-pip install -e ".[dev]"
-```
-
-### Verifying Installation
-
-After installation, verify that PromptCraft is working correctly:
-
-```bash
-# Check version
-promptcraft --version
-
-# View help
-promptcraft --help
-
-# Initialize a project to test functionality
+```sh
 promptcraft --init
-```
-
-### Troubleshooting Installation
-
-#### Common Issues
-
-**Permission Errors on Windows:**
-```bash
-# Run as administrator or use user installation
-pip install --user .
-```
-
-**Permission Errors on macOS/Linux:**
-```bash
-# Don't use sudo, use virtual environment instead
-python -m venv venv
-source venv/bin/activate
-pip install .
-```
-
-**Python Not Found:**
-- Ensure Python 3.10+ is installed and in your PATH
-- Try `python3` instead of `python` on macOS/Linux
-- On Windows, try `py` instead of `python`
-
-**pip Not Found:**
-```bash
-# Install pip if missing
-python -m ensurepip --upgrade
-```
-
-#### Clean Installation
-
-If you encounter issues, try a clean installation:
-
-```bash
-# Uninstall the existing installation
-pipx uninstall promptcraft
-
-# Reinstall
-pipx install .
-```
-
-## Development Setup
-
-### Setting up Development Environment
-
-1. Clone the repository and navigate to the project directory
-2. Create a virtual environment:
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
-
-3. Install development dependencies:
-   ```bash
-   pip install -e ".[dev]"
-   ```
-
-### Project Structure
-
-```
-promptcraft/
-├── cmd/promptcraft/         # Go entry point (cobra)
-├── internal/
-│   ├── core/                # discovery, $ARGUMENTS substitution, caches
-│   ├── clipboard/           # native + OSC 52 routes and detection
-│   ├── cli/                 # CLI behaviour and messages
-│   ├── tui/                 # Bubble Tea screens
-│   ├── apperror/            # structured errors with error codes
-│   ├── style/               # terminal colours
-│   └── version/             # reported version
-├── tests/parity/            # Go vs legacy parity harness
-├── legacy/python/           # frozen Python implementation and its suite
-├── go.mod                   # Go module configuration
-├── README.md                # This file
-└── .gitignore               # Git ignore rules
-```
-
-### Running Tests
-
-```bash
-go test ./...                          # unit tests, TUI golden files, parity harness
-go test ./internal/tui/ -rewrite-golden # regenerate the golden files
-golangci-lint run ./...
-```
-
-The legacy Python suite still runs from `legacy/python`:
-
-```bash
-cd legacy/python && pytest
-```
-
-### Running the CLI
-
-After installation, you can run the CLI with:
-
-```bash
-promptcraft
-```
-
-Or during development:
-
-```bash
-python -m promptcraft.main
-```
-
-## Complete Command Reference
-
-PromptCraft provides a comprehensive command-line interface for managing prompt templates. All commands follow consistent patterns for predictable usage.
-
-### Core Syntax
-
-```bash
-promptcraft [COMMAND] [ARGUMENTS...] [FLAGS]
-```
-
-### Primary Commands
-
-#### Template Execution
-Execute any template command with optional arguments:
-
-```bash
-# Basic template execution (copies to clipboard by default)
-promptcraft my-template
-
-# Execute with single argument
-promptcraft create-story "User Authentication"
-
-# Execute with multiple arguments
-promptcraft fix-bug "critical" "security vulnerability" "auth module"
-
-# Commands work with or without leading slash
-promptcraft /create-story "User Story"
-promptcraft create-story "User Story"
-
-# Arguments with spaces must be quoted
-promptcraft generate-code "class UserManager" "authentication logic"
-```
-
-#### Project Initialization
-Set up PromptCraft structure in current directory:
-
-```bash
-# Initialize project with example templates
-promptcraft --init
-
-# After initialization, your project will have:
-# .promptcraft/commands/exemplo.md - Example template
-```
-
-#### Template Discovery
-List all available templates from discovery paths:
-
-```bash
-# List all discovered templates
+promptcraft                         # interactive workspace (TTY required)
 promptcraft --list
-
-# Output shows template name and description
-# Templates are loaded from:
-#   - .promptcraft/commands/ (current directory)
-#   - ~/.promptcraft/commands/ (user home directory)
+promptcraft exemplo "describe the change"
+promptcraft --stdout exemplo "describe the change"
 ```
 
-#### Version Information
-Display current PromptCraft version:
+Templates are ordinary `.md` files in:
 
-```bash
-# Show version information
-promptcraft --version
-```
+- `.promptcraft/commands/` — templates for the current project;
+- `~/.promptcraft/commands/` — personal templates available in every project.
 
-#### Help and Documentation
-Access built-in help system:
+A project template overrides a user template with the same name. Names can be supplied with or without a leading slash.
 
-```bash
-# Show complete help with all options
-promptcraft --help
+### Write a template
 
-# Help includes usage patterns and examples
-```
-
-### Command Flags and Options
-
-#### Output Control Flags
-
-**`--stdout`** - Output to terminal instead of clipboard
-```bash
-# Default behavior: copy to clipboard
-promptcraft create-story "Feature Request"
-
-# Terminal output: display result in console
-promptcraft create-story "Feature Request" --stdout
-
-# Useful for debugging or headless environments
-promptcraft debug-template "test data" --stdout
-```
-
-#### Operational Flags
-
-**`--init`** - Initialize project structure
-```bash
-# Create .promptcraft/commands/ directory with examples
-promptcraft --init
-
-# Safe to run multiple times (won't overwrite existing templates)
-```
-
-**`--list`** - Display all available templates
-```bash
-# Show template name and first line (description)
-promptcraft --list
-
-# Example output:
-# Available commands:
-# exemplo - Template example for PromptCraft demonstration
-# create-story - Generate user story template
-```
-
-**`--version`** - Show version information
-```bash
-# Display current version
-promptcraft --version
-
-# Example output: PromptCraft CLI version 1.0.0
-```
-
-**`--help`** - Display help information
-```bash
-# Show complete usage information
-promptcraft --help
-```
-
-### Command Execution Patterns
-
-#### Individual Developer Workflow
-```bash
-# Morning routine: check available templates
-promptcraft --list
-
-# Create user story for new feature
-promptcraft create-story "Payment Integration" "stripe checkout"
-
-# Generate code review checklist
-promptcraft code-review "payment-service.py"
-
-# Create bug report template
-promptcraft bug-report "critical" "payment processing failure"
-```
-
-#### Team Collaboration Scenarios
-```bash
-# Project initialization for new team member
-promptcraft --init
-
-# Standardized story creation
-promptcraft epic-story "User Management" "authentication authorization"
-
-# Code documentation generation
-promptcraft api-docs "UserController" "REST endpoints"
-
-# Meeting notes template
-promptcraft meeting-notes "Sprint Planning" "2024-01-15"
-```
-
-#### Development Integration Patterns
-```bash
-# Git commit message generation
-promptcraft commit-msg "feat" "add user authentication"
-
-# Pull request description
-promptcraft pr-description "authentication-feature" "user login system"
-
-# Documentation updates
-promptcraft update-docs "authentication" "login flow changes"
-```
-
-#### Advanced Usage Scenarios
-```bash
-# Complex multi-argument templates
-promptcraft api-spec "UserService" "POST /users" "create user endpoint"
-
-# Template with environment-specific content
-promptcraft deploy-notes "production" "v2.1.0" "authentication updates"
-
-# Debug and development templates
-promptcraft debug-session "authentication-bug" --stdout
-```
-
-### Template Discovery and Organization
-
-#### Discovery Paths
-PromptCraft automatically searches for templates in these locations (in order):
-
-1. **Project-level templates**: `.promptcraft/commands/`
-   - Templates specific to current project
-   - Shared with team via version control
-   - Takes precedence over user templates
-
-2. **User-level templates**: `~/.promptcraft/commands/`
-   - Personal templates across all projects
-   - User-specific customizations
-   - Backup location for common templates
-
-#### Template File Requirements
-- **File Extension**: Must be `.md` (Markdown)
-- **File Name**: Becomes the command name (without .md extension)
-- **First Line**: Used as template description in `--list` output
-- **Content**: Template body with `$ARGUMENTS` placeholders
-
-#### Template Naming Conventions
-```bash
-# Good template names (recommended):
-create-story.md          → promptcraft create-story
-bug-report.md           → promptcraft bug-report
-api-documentation.md    → promptcraft api-documentation
-meeting-notes.md        → promptcraft meeting-notes
-
-# Valid but not recommended:
-CreateStory.md          → promptcraft CreateStory
-bug_report.md           → promptcraft bug_report
-api.docs.md            → promptcraft api.docs
-```
-
-### Error Handling and Troubleshooting
-
-#### Common Command Errors
-
-**Command Not Found**
-```bash
-# Error example:
-promptcraft nonexistent-command
-# Output: Command '/nonexistent-command' not found
-#         Run 'promptcraft --list' to see available commands
-
-# Resolution: Check available commands
-promptcraft --list
-```
-
-**Template Read Errors**
-```bash
-# When template file is corrupted or inaccessible:
-# Output: Unable to read template file: /path/to/template.md
-
-# Resolution: Verify file permissions and content
-ls -la .promptcraft/commands/
-```
-
-**Clipboard Access Issues**
-```bash
-# When clipboard is unavailable:
-promptcraft my-template
-# Output: Clipboard unavailable, use --stdout instead
-#         [Template content displayed in terminal]
-
-# Resolution: Use --stdout flag
-promptcraft my-template --stdout
-```
-
-#### Platform-Specific Considerations
-
-**Windows**
-```bash
-# Use quotes for arguments with spaces
-promptcraft create-story "Feature Name"
-
-# PowerShell compatibility
-promptcraft create-story 'Feature Name'
-```
-
-**macOS/Linux**
-```bash
-# Single or double quotes both work
-promptcraft create-story "Feature Name"
-promptcraft create-story 'Feature Name'
-
-# Shell expansion considerations
-promptcraft create-story "Feature $(date)"
-```
-
-#### Debugging Commands
-```bash
-# Verify installation
-promptcraft --version
-
-# Check template discovery
-promptcraft --list
-
-# Test template execution with terminal output
-promptcraft your-template --stdout
-
-# Check project structure
-ls -la .promptcraft/commands/
-```
-
-### Integration with Development Tools
-
-#### Git Integration
-```bash
-# Git hook integration example
-promptcraft commit-msg "$(git diff --name-only --cached)"
-
-# Pre-commit template generation
-promptcraft pre-commit-checklist --stdout
-```
-
-#### IDE Integration
-```bash
-# VS Code task integration
-promptcraft code-review "${file}" --stdout
-
-# Documentation generation
-promptcraft class-docs "${className}" --stdout
-```
-
-#### CI/CD Integration
-```bash
-# Deployment documentation
-promptcraft deploy-notes "${CI_COMMIT_TAG}" "${ENVIRONMENT}"
-
-# Release notes generation
-promptcraft release-notes "${VERSION}" --stdout
-```
-
-## Template Creation Guide
-
-### Template File Format
-
-PromptCraft templates are Markdown files with a specific structure:
+Save `.promptcraft/commands/review.md`:
 
 ```markdown
-# First line: Template description (shows in --list)
-Generate a user story template
-
-# Template body with placeholders
-## User Story: $ARGUMENTS[0]
-
-**As a** user,
-**I want** $ARGUMENTS[1],
-**so that** $ARGUMENTS[2].
-
-### Acceptance Criteria
-- [ ] $ARGUMENTS[3]
-- [ ] Comprehensive testing completed
-- [ ] Documentation updated
+# Code review
+Review $ARGUMENTS for correctness, security and maintainability.
+Explain each finding and suggest a concrete fix.
 ```
 
-### Placeholder System
+Then run:
 
-**Basic Placeholders**
-- `$ARGUMENTS[0]` - First argument
-- `$ARGUMENTS[1]` - Second argument
-- `$ARGUMENTS[n]` - Nth argument (0-indexed)
+```sh
+promptcraft review "internal/core"
+promptcraft --stdout /review "internal/core"
+```
 
-**Advanced Usage**
+The first line supplies the description in the library. `$ARGUMENTS` inserts the full argument text. Indexed placeholders are zero-based:
+
 ```markdown
-# Multiple placeholder usage
-## $ARGUMENTS[0] Implementation
-
-**Priority**: $ARGUMENTS[1]
-**Component**: $ARGUMENTS[2]
-**Description**: $ARGUMENTS[3]
-
-### Implementation Notes
-- Focus on $ARGUMENTS[0] functionality
-- Consider $ARGUMENTS[1] priority level
-- Integrate with $ARGUMENTS[2] component
+Compare $ARGUMENTS[0] with $ARGUMENTS[1].
 ```
 
-### Template Examples
-
-#### Simple Template: `hello.md`
-```markdown
-Simple greeting template
-Hello $ARGUMENTS[0]! Welcome to PromptCraft.
+```sh
+promptcraft --stdout compare before after
 ```
 
-Usage: `promptcraft hello "World"`
-Output: `Hello World! Welcome to PromptCraft.`
+Out-of-range indexes are replaced with empty text. The interactive arguments field supplies its full text as a single argument; use the CLI for separate indexed arguments.
 
-#### Complex Template: `user-story.md`
-```markdown
-Generate comprehensive user story with acceptance criteria
-## User Story: $ARGUMENTS[0]
+## Interactive workspace
 
-**As a** $ARGUMENTS[1],
-**I want** $ARGUMENTS[2],
-**so that** $ARGUMENTS[3].
+Run `promptcraft` without arguments in a terminal.
 
-### Acceptance Criteria
-1. $ARGUMENTS[4]
-2. All edge cases are handled appropriately
-3. Performance requirements are met
-4. Security considerations are addressed
+- **Template library:** search names, descriptions and sources; preview the selected template; create, edit, delete or initialize the project.
+- **Responsive dashboard:** side-by-side library and preview on wide terminals, stacked preview when space permits, compact list on smaller terminals.
+- **Run form:** visible field/action focus; generate and copy, or preview without copying.
+- **Result:** wrapped read-only text, scroll progress and clipboard retry. Copying always uses the original text, never its wrapped presentation.
+- **Editor:** project/user scope, visible caret, undo/redo and unsaved-change protection. Renaming or changing scope moves the template; overwrites and deletions require confirmation.
+- **Help and setup:** scrollable panels and contextual keyboard hints.
 
-### Technical Notes
-- Component: $ARGUMENTS[0]
-- Priority: High
-- Estimated effort: TBD
+| Screen | Keys | Action |
+|---|---|---|
+| Library | `↑/↓`, `j/k`, `PgUp/PgDn` | Select or browse templates |
+| Library | `/`, `Ctrl+F` | Search; `Enter` applies, `Esc` clears |
+| Library | `Enter`, `r` | Open the selected template |
+| Library | `n`, `e`, `d` | Create, edit, delete (repeat `d` to confirm) |
+| Library | `i`, `f`, `v`, `?` | Setup, refresh, about, keyboard guide |
+| Run | `Enter`, `Ctrl+S` | Generate and copy |
+| Run | `Ctrl+P` | Generate and preview without copying |
+| Run | `Tab`, `Shift+Tab` | Cycle field and actions |
+| Result/help | `↑/↓`, `PgUp/PgDn`, `Home/End` | Scroll |
+| Result | `c` | Copy or retry |
+| Editor | `Tab`, `Shift+Tab` | Next/previous field |
+| Editor | `Ctrl+S`, `Ctrl+D` | Save or delete; confirm destructive actions |
+| Editor | `Ctrl+Z`, `Ctrl+Y` | Undo/redo content edits |
+| Editor | `Esc` | Go back; repeat to discard unsaved changes |
+| Global | `Ctrl+Q`, `Ctrl+C` | Quit; unsaved changes require confirmation |
 
-### Definition of Done
-- [ ] Implementation complete
-- [ ] Tests written and passing
-- [ ] Code reviewed
-- [ ] Documentation updated
+Minimum terminal size: **40 columns × 12 rows**. A normal **80 × 24** terminal is recommended; **100 × 30** or larger enables the full dashboard.
+
+## Clipboard
+
+PromptCraft attempts the native clipboard and falls back to **OSC 52** through the terminal for SSH/headless sessions. Native clipboard utilities may need to be installed for your platform. Terminal clipboard support and permissions are controlled by your terminal.
+
+```sh
+PROMPTCRAFT_CLIPBOARD=osc52 promptcraft review "changes"
+PROMPTCRAFT_CLIPBOARD=native promptcraft review "changes"
 ```
 
-Usage: `promptcraft user-story "Authentication" "developer" "secure login system" "users can access protected resources" "Login form validates credentials"`
+OSC 52 is fire-and-forget: “sent” does not guarantee the terminal accepted the copy. If copying fails, the CLI prints the prompt, or use `--stdout` explicitly. In the TUI, use `Ctrl+P` to preview and select the text. OSC 52 payloads are limited to 192 KiB.
 
-#### Team Template: `sprint-planning.md`
-```markdown
-Sprint planning meeting template
-# Sprint Planning - $ARGUMENTS[0]
+## CLI options
 
-**Sprint Goal**: $ARGUMENTS[1]
-**Duration**: $ARGUMENTS[2]
-**Team**: $ARGUMENTS[3]
+```text
+promptcraft [OPTIONS] [COMMAND_NAME] [ARGUMENTS...]
 
-## Sprint Backlog
-### Priority Items
-1. $ARGUMENTS[4]
-
-### Additional Items
-- TBD during planning
-
-## Capacity Planning
-- Total capacity: TBD
-- Planned velocity: TBD
-
-## Risk Assessment
-- Risk: $ARGUMENTS[5]
-- Mitigation: TBD
+--init       Create project directories and an example (preserve existing files)
+--list       List available templates and their sources
+--stdout     Print generated prompt instead of copying
+--version    Report the installed version
+--help       Show CLI help
 ```
 
-### Template Best Practices
+Failures to read/process templates, initialize directories or write output return a nonzero exit code. Template deletion is restricted to authorized template roots, including symlink checks.
 
-#### Naming Conventions
-- Use lowercase with hyphens: `user-story.md`, `api-docs.md`
-- Be descriptive: `bug-report.md` instead of `bug.md`
-- Group related templates: `git-commit.md`, `git-pr.md`
+## Development
 
-#### Content Guidelines
-- First line is description (clear and concise)
-- Use meaningful placeholder names in comments
-- Include examples in template body
-- Structure content logically
-- Consider team consistency
+```sh
+make build
+make test                       # go test -race ./...
+make lint                       # golangci-lint run ./...
+go test -coverprofile=coverage.out ./...
+go tool cover -func=coverage.out
+```
 
-#### Organization Strategies
-```bash
-# By category
-.promptcraft/commands/
-├── stories/
-│   ├── user-story.md
-│   └── epic-story.md
-├── development/
-│   ├── code-review.md
-│   └── bug-report.md
-└── documentation/
-    ├── api-docs.md
-    └── readme-update.md
+CI builds and tests Go on Linux, macOS and Windows, with a total coverage gate of 85%.
+Unit and regression tests cover template processing, filesystem guards, clipboard routing and TUI interactions. Integration tests build and execute the CLI in isolated directories. Golden snapshots protect screen rendering:
+
+```sh
+go test ./internal/tui -rewrite-golden
+```
+
+Review golden diffs before accepting changes. Keep CLI compatibility and template data intact when evolving the interface.
+
+```text
+cmd/promptcraft/       executable entry point
+internal/cli/         Cobra CLI and output handling
+internal/core/        template discovery, processing, caching and filesystem actions
+internal/clipboard/   native and OSC 52 delivery
+internal/tui/         Bubble Tea screens, theme, editor and regression snapshots
+internal/style/       CLI color helpers
+internal/version/     version source
+internal/apperror/    typed application errors
+tests/integration/    built-binary CLI contract tests
+docs/architecture.md  current implementation architecture
 ```
 
 ## Troubleshooting
 
-### Common Issues and Solutions
-
-#### Clipboard Integration Issues
-
-**Issue**: Clipboard operations fail on headless systems
-```bash
-# Symptom:
-promptcraft my-template
-# Output: Clipboard unavailable, use --stdout instead
-
-# Solution: Use --stdout flag
-promptcraft my-template --stdout
-```
-
-**Clipboard over SSH and inside herdr (OSC 52)**
-
-Inside a [herdr](https://herdr.dev) pane (`HERDR_ENV=1`) or an SSH session, and
-whenever the native clipboard is unavailable, PromptCraft copies through the
-terminal with an OSC 52 escape sequence instead of the host clipboard tools.
-herdr forwards it to the clipboard of the attached client (local, `ssh` +
-`herdr`, or `herdr --remote`); over plain SSH your local terminal applies it.
-Success is reported as "sent to clipboard via terminal (OSC 52)" because
-terminals never confirm the write.
-
-- Your local terminal must accept OSC 52 writes (Ghostty, kitty, WezTerm, foot,
-  Alacritty, Windows Terminal; iTerm2 needs clipboard access enabled). GNOME
-  Terminal and macOS Terminal.app do not support it.
-- Through tmux, enable `set -g set-clipboard on`.
-- Text above 192 KiB is not sent (herdr's limit); use `--stdout`.
-- Override the detection with `PROMPTCRAFT_CLIPBOARD=osc52` or
-  `PROMPTCRAFT_CLIPBOARD=native`.
-
-**Issue**: Clipboard access denied on Linux
-```bash
-# Symptom: Permission denied accessing clipboard
-
-# Solution: Install required clipboard utilities
-# Ubuntu/Debian:
-sudo apt-get install xclip xsel
-
-# Fedora/RHEL:
-sudo dnf install xclip xsel
-
-# Arch Linux:
-sudo pacman -S xclip xsel
-```
-
-**Issue**: Clipboard not working in WSL (Windows Subsystem for Linux)
-```bash
-# Solution 1: Install wslu package
-sudo apt update && sudo apt install wslu
-
-# Solution 2: Use --stdout flag as fallback
-promptcraft my-template --stdout
-```
-
-#### Platform-Specific Issues
-
-**Windows PowerShell Issues**
-```powershell
-# Issue: Command not recognized
-promptcraft --version
-# Error: 'promptcraft' is not recognized
-
-# Solution 1: Restart PowerShell after installation
-# Solution 2: Check PATH environment variable
-$env:PATH -split ';' | Select-String python
-
-# Solution 3: Use Python module directly
-python -m promptcraft.main --version
-```
-
-**macOS Permission Issues**
-```bash
-# Issue: Permission denied on template directory creation
-promptcraft --init
-# Error: Permission denied: ~/.promptcraft/commands/
-
-# Solution: Fix directory permissions
-chmod 755 ~
-mkdir -p ~/.promptcraft/commands
-chmod 755 ~/.promptcraft ~/.promptcraft/commands
-```
-
-**Linux Distribution-Specific Issues**
-```bash
-# Issue: Python 3.10+ not available
-# Solution varies by distribution:
-
-# Ubuntu 20.04 (add deadsnakes PPA):
-sudo add-apt-repository ppa:deadsnakes/ppa
-sudo apt update
-sudo apt install python3.11 python3.11-pip
-
-# CentOS/RHEL 8 (enable PowerTools):
-sudo dnf config-manager --enable powertools
-sudo dnf install python39
-
-# Use specific Python version:
-python3.11 -m pip install .
-```
-
-#### Installation and Dependency Issues
-
-**Issue**: pip installation fails with permission errors
-```bash
-# Symptom:
-pip install .
-# Error: ERROR: Could not install packages due to an EnvironmentError
-
-# Solution 1: Use virtual environment (recommended)
-python -m venv promptcraft-env
-source promptcraft-env/bin/activate  # Linux/macOS
-promptcraft-env\Scripts\activate     # Windows
-pip install .
-
-# Solution 2: User installation (not recommended for development)
-pip install --user .
-```
-
-**Issue**: Dependencies conflict with existing packages
-```bash
-# Symptom: Package conflicts during installation
-
-# Solution: Use isolated virtual environment
-python -m venv --clear promptcraft-clean-env
-source promptcraft-clean-env/bin/activate
-pip install --upgrade pip
-pip install .
-```
-
-**Issue**: Template discovery not working
-```bash
-# Symptom:
-promptcraft --list
-# Output: No commands found
-
-# Diagnostic steps:
-# 1. Check if directories exist
-ls -la .promptcraft/commands/
-ls -la ~/.promptcraft/commands/
-
-# 2. Verify template file format
-cat .promptcraft/commands/exemplo.md
-
-# 3. Check file permissions
-ls -la .promptcraft/commands/*.md
-
-# Solutions:
-# Re-initialize project
-promptcraft --init
-
-# Manually create template
-mkdir -p .promptcraft/commands
-echo -e "Example template\nHello $ARGUMENTS[0]!" > .promptcraft/commands/hello.md
-```
-
-#### Development and Testing Issues
-
-**Issue**: Tests failing after installation
-```bash
-# Run diagnostic tests
-python -m pytest tests/ -v
-
-# Common fixes:
-# 1. Install development dependencies
-pip install -e ".[dev]"
-
-# 2. Update test database
-python -m pytest --co -q  # Check test discovery
-
-# 3. Clear Python cache
-find . -name "*.pyc" -delete
-find . -name "__pycache__" -type d -exec rm -rf {} +
-```
-
-**Issue**: Import errors in development
-```bash
-# Symptom:
-python -m promptcraft.main
-# Error: ModuleNotFoundError: No module named 'promptcraft'
-
-# Solution: Install in editable mode
-pip install -e .
-
-# Or use Python path directly
-PYTHONPATH=src python -m promptcraft.main
-```
-
-#### Performance Issues
-
-**Issue**: Slow template discovery on large directories
-```bash
-# Symptom: `promptcraft --list` takes a long time
-
-# Diagnostic: Check directory size
-find .promptcraft/commands/ -name "*.md" | wc -l
-find ~/.promptcraft/commands/ -name "*.md" | wc -l
-
-# Solution: Organize templates in subdirectories
-# Move infrequently used templates to archive/
-mkdir -p .promptcraft/commands/archive/
-mv .promptcraft/commands/old-*.md .promptcraft/commands/archive/
-```
-
-### Getting Help
-
-#### Debug Information Collection
-When reporting issues, include this diagnostic information:
-
-```bash
-# System information
-promptcraft --version
-python --version
-pip --version
-uname -a  # Linux/macOS
-systeminfo | findstr /B /C:"OS Name" /C:"OS Version"  # Windows
-
-# PromptCraft configuration
-promptcraft --list
-ls -la .promptcraft/commands/ 2>/dev/null || echo "No local templates"
-ls -la ~/.promptcraft/commands/ 2>/dev/null || echo "No user templates"
-
-# Test basic functionality
-promptcraft --help
-echo "Test template" | promptcraft test-template --stdout
-```
-
-#### Community Support
-- **GitHub Issues**: Report bugs and feature requests
-- **Discussions**: Ask questions and share templates
-- **Wiki**: Community-contributed examples and guides
-
-## Contributing Guidelines
-
-### Development Environment Setup
-
-#### Prerequisites
-- **Python 3.10+** installed and available in PATH
-- **Git** for version control
-- **Virtual environment** tools (venv recommended)
-- **Text editor** or IDE (VS Code, PyCharm, etc.)
-
-#### Initial Setup
-```bash
-# 1. Fork the repository on GitHub
-# 2. Clone your fork locally
-git clone https://github.com/YOUR_USERNAME/promptcraft.git
-cd promptcraft
-
-# 3. Create development environment
-python -m venv venv
-source venv/bin/activate  # Linux/macOS
-venv\Scripts\activate     # Windows
-
-# 4. Install in development mode
-pip install -e ".[dev]"
-
-# 5. Verify installation
-promptcraft --version
-pytest tests/ -v
-```
-
-#### Development Workflow
-```bash
-# Create feature branch
-git checkout -b feature/your-feature-name
-
-# Make your changes
-# ... edit code ...
-
-# Run tests frequently
-pytest tests/ -v
-
-# Check code formatting
-black src/ tests/
-flake8 src/ tests/
-
-# Run complete test suite
-pytest tests/ --cov=promptcraft --cov-report=html
-
-# Commit your changes
-git add .
-git commit -m "feat: add your feature description"
-
-# Push and create pull request
-git push origin feature/your-feature-name
-```
-
-### Code Contribution Standards
-
-#### Code Style
-- **Formatting**: Use `black` for code formatting
-- **Linting**: Use `flake8` for code linting  
-- **Type Hints**: Include type annotations for all functions
-- **Docstrings**: Follow Google-style docstring format
-- **Line Length**: Maximum 88 characters (black default)
-
-#### Example Code Style
-```python
-def process_template(template_path: str, arguments: List[str]) -> str:
-    """Process template file with provided arguments.
-    
-    Args:
-        template_path: Path to the template file
-        arguments: List of arguments to substitute
-        
-    Returns:
-        Processed template content with arguments substituted
-        
-    Raises:
-        TemplateReadError: When template file cannot be read
-        ArgumentError: When required arguments are missing
-    """
-    # Implementation here
-    pass
-```
-
-#### Testing Requirements
-
-**Test Coverage**: Minimum 95% code coverage required
-
-```bash
-# Run tests with coverage
-pytest tests/ --cov=promptcraft --cov-report=term-missing
-
-# Generate HTML coverage report
-pytest tests/ --cov=promptcraft --cov-report=html
-open htmlcov/index.html  # View detailed coverage
-```
-
-**Test Types Required**:
-1. **Unit Tests**: Test individual functions and classes
-2. **Integration Tests**: Test CLI commands end-to-end
-3. **Template Tests**: Validate template processing logic
-4. **Error Handling Tests**: Test exception scenarios
-
-**Test Organization**:
-```
-tests/
-├── unit/
-│   ├── test_core.py          # Core functionality tests
-│   ├── test_main.py          # CLI interface tests
-│   └── test_exceptions.py    # Exception handling tests
-├── integration/
-│   └── test_cli_integration.py  # End-to-end CLI tests
-└── fixtures/
-    └── templates/            # Test template files
-```
-
-#### Commit Message Standards
-
-Use conventional commit format:
-```bash
-# Format: type(scope): description
-feat(cli): add --debug flag for verbose output
-fix(core): handle empty template files gracefully  
-docs(readme): update installation instructions
-test(cli): add integration tests for --init command
-refactor(core): extract template parsing logic
-```
-
-**Commit Types**:
-- `feat`: New features
-- `fix`: Bug fixes
-- `docs`: Documentation changes
-- `test`: Test additions or modifications
-- `refactor`: Code refactoring
-- `perf`: Performance improvements
-- `chore`: Maintenance tasks
-
-### Pull Request Guidelines
-
-#### Before Submitting
-- [ ] All tests pass locally
-- [ ] Code coverage ≥ 95%
-- [ ] Code formatted with `black`
-- [ ] No linting errors (`flake8`)
-- [ ] Documentation updated if needed
-- [ ] Commit messages follow conventional format
-
-#### Pull Request Template
-```markdown
-## Description
-Brief description of changes made
-
-## Type of Change
-- [ ] Bug fix (non-breaking change that fixes an issue)
-- [ ] New feature (non-breaking change that adds functionality)  
-- [ ] Breaking change (fix or feature causing existing functionality to change)
-- [ ] Documentation update
-
-## Testing
-- [ ] New tests added for new functionality
-- [ ] All existing tests pass
-- [ ] Manual testing completed
-
-## Screenshots (if applicable)
-Add screenshots to help explain your changes
-
-## Checklist
-- [ ] My code follows the project's style guidelines
-- [ ] I have performed a self-review of my code
-- [ ] I have commented my code, particularly hard-to-understand areas
-- [ ] I have made corresponding changes to the documentation
-- [ ] My changes generate no new warnings
-- [ ] New and existing unit tests pass locally
-```
-
-#### Review Process
-1. **Automated Checks**: CI/CD pipeline runs tests and linting
-2. **Code Review**: At least one maintainer reviews code
-3. **Discussion**: Address feedback and questions
-4. **Approval**: Maintainer approves after all checks pass
-5. **Merge**: Squash and merge to main branch
-
-### Documentation Contributions
-
-#### Documentation Types
-- **Code Documentation**: Docstrings and inline comments
-- **User Documentation**: README, usage guides, examples
-- **Developer Documentation**: Contributing guidelines, architecture docs
-- **API Documentation**: Generated from docstrings
-
-#### Documentation Standards
-- **Clarity**: Write for the target audience (user vs developer)
-- **Completeness**: Cover all features and edge cases
-- **Examples**: Include practical, working examples
-- **Maintenance**: Keep documentation in sync with code changes
-
-### Release Process
-
-#### Versioning
-- Follow [Semantic Versioning](https://semver.org/) (MAJOR.MINOR.PATCH)
-- Update version in `pyproject.toml`
-- Create git tag for releases
-
-#### Release Checklist
-- [ ] All tests passing on main branch
-- [ ] Version number updated
-- [ ] CHANGELOG.md updated
-- [ ] Documentation reviewed and updated
-- [ ] Release notes prepared
-- [ ] Git tag created
-- [ ] Package built and tested
-- [ ] Release published
-
-### Community Guidelines
-
-#### Code of Conduct
-- Be respectful and inclusive in all interactions
-- Focus on constructive feedback and solutions
-- Help newcomers get started with contributing
-- Follow project communication guidelines
-
-#### Getting Support
-- **Questions**: Use GitHub Discussions
-- **Bugs**: Create GitHub Issues with reproduction steps
-- **Features**: Discuss in GitHub Issues before implementing
-- **Urgent Issues**: Tag maintainers in issues
-
-Thank you for contributing to PromptCraft! 🚀
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## Support
-
-For questions and support, please open an issue on GitHub.
-## Interactive terminal UI (TUI)
-
-Running `promptcraft` with no arguments in an interactive terminal opens an
-interactive interface (Textual) instead of an error:
-
-- **Home** — list of templates from `.promptcraft/commands/` (project) and
-  `~/.promptcraft/commands/` (user), project wins on name conflicts, with the
-  first line of each `.md` shown as the description. Keys: `r`/`Enter` run,
-  `n` new, `e` edit, `d` delete (press twice to confirm), `i` init,
-  `v` version, `f` refresh, `?` help, `q` quit.
-- **Run** — form with the arguments for `$ARGUMENTS`. The result is copied to
-  the clipboard by default (`Enter`/`s`), with clear success / failure
-  feedback (press `d` to view it on screen as `Result`).
-- **Create / edit** — writes the template to the chosen scope (project or
-  user), warning before overwriting an existing one (`Ctrl+S` to confirm).
-  Editing a template to another name or scope moves it there (the original
-  file is removed), so a project template can become a user template.
-  Templates can also be deleted directly while editing (`Ctrl+D` / button).
-- **Init** — idempotent project initialization (never overwrites templates).
-- All shortcuts stay visible in the footer; every action gives clear feedback.
-
-All other CLI invocations (`--init`, `--list`, `--stdout`, `--version`,
-`--help`, direct template execution) behave exactly as before. Textual is
-imported lazily, only when the TUI is launched, so CLI cold start is
-unaffected.
+- **Command not found:** check `PATH`, `go env GOPATH` and the installation destination.
+- **No templates:** use `--init`, create a `.md` template, or check the current working directory; `f` refreshes the library after external changes.
+- **Clipboard unavailable:** install native clipboard tools, enable OSC 52 in the terminal, or use `--stdout` / TUI preview.
+- **Terminal too small:** resize it; narrow layouts intentionally omit the preview.
+- **Read/write denied:** check template directory permissions. Failed reads are shown read-only in the editor and cannot overwrite the file.
+
+For bugs, include the PromptCraft version, OS, terminal name, exact command/key sequence and a minimal reproducible template. Do not include confidential prompt content.

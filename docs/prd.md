@@ -1,5 +1,7 @@
 # PromptCraft Product Requirements Document (PRD)
 
+> Historical planning document. Not the current product specification; see [documentation scope](README.md) and the [current architecture](architecture.md).
+
 ## Goals and Background Context
 
 ### Goals

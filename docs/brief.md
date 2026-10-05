@@ -1,5 +1,7 @@
 # Project Brief: PromptCraft
 
+> Historical planning document. Not the current product specification; see [documentation scope](README.md) and the [current architecture](architecture.md).
+
 ## Executive Summary
 
 **PromptCraft** is a Python CLI tool that enables developers to define and use "slash commands" (e.g., `/review`) to generate complex, standardized prompts for AI assistants. The tool acts as a universal prompt preprocessor, storing prompt logic in reusable template files to eliminate repetitive typing and ensure consistency across development teams. This addresses the critical problem of developers wasting time and mental energy on repetitive AI interactions while reducing prompt inconsistencies in team environments.

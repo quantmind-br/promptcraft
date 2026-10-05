@@ -1,5 +1,7 @@
 # PromptCraft Product Requirements Document (PRD)
 
+> Historical requirements. Current behavior and tooling are documented in the [user guide](../../README.md).
+
 ## Table of Contents
 
 - [PromptCraft Product Requirements Document (PRD)](#table-of-contents)

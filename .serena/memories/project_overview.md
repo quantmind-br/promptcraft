@@ -1,33 +1,7 @@
-# PromptCraft Project Overview
+# PromptCraft project overview
 
-## Project Purpose
-PromptCraft CLI is a command-line tool for managing prompt templates efficiently. It helps developers and content creators manage, organize, and utilize prompt templates effectively.
+PromptCraft is a Go CLI and Bubble Tea terminal workspace for reusable Markdown prompt templates. Entry point: `cmd/promptcraft`. Runtime packages: `internal/cli`, `internal/core`, `internal/clipboard`, `internal/tui`, `internal/style`, `internal/version`, `internal/apperror`.
 
-## Technology Stack
-- **Python:** 3.10+ (setuptools build system)
-- **CLI Framework:** Click 8.0+
-- **Clipboard Operations:** pyperclip 1.8+
-- **Testing:** Pytest 7+ with pytest-cov, pytest-benchmark
-- **Build System:** setuptools>=61.0 with wheel support
-- **Package Management:** pip with pyproject.toml support
+Project templates live in `.promptcraft/commands`; user templates live in `~/.promptcraft/commands`. Project templates take precedence. Build with Go 1.24.2 or newer and install using `make install`. No interpreter or legacy implementation is required.
 
-## Project Structure
-```
-promptcraft/
-├── src/promptcraft/          # Main package source
-│   ├── main.py              # CLI entry point
-│   ├── core.py              # Core template processing
-│   ├── exceptions.py        # Custom exceptions
-│   └── __init__.py         # Package init
-├── tests/                   # Test files with 95% coverage target
-├── docs/                   # Documentation and stories
-├── .bmad-core/            # Agent configuration
-└── pyproject.toml         # Project configuration
-```
-
-## Key Features
-- Template management and organization
-- Command-line interface for workflow integration
-- Clipboard operations for quick template access
-- Extensible architecture for custom template processing
-- Cross-platform support (Windows, macOS, Linux)
+Canonical guides: `README.md`, `APP.md`, `docs/architecture.md`. Older nested planning documents are historical; see `docs/README.md`.

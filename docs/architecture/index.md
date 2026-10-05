@@ -1,5 +1,7 @@
 # PromptCraft Fullstack Architecture Document
 
+> Historical full-stack proposal, not the current implementation. See [current architecture](../architecture.md).
+
 ## Table of Contents
 
 - [PromptCraft Fullstack Architecture Document](#table-of-contents)
