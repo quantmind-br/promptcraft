@@ -17,15 +17,12 @@ func (failingWriter) Write([]byte) (int, error) { return 0, errors.New("broken p
 func TestInitFailureExitsWithCodeOne(t *testing.T) {
 	options, buffer := testOptions(t)
 
-	// Point the processor at a directory where creating .promptcraft is refused.
-	readonly := filepath.Join(filepath.Dir(options.Core.ProjectDir()), "locked")
-	if err := os.MkdirAll(readonly, 0o755); err != nil {
+	// An ordinary file cannot be a working-directory root on any platform.
+	blocked := filepath.Join(t.TempDir(), "blocked")
+	if err := os.WriteFile(blocked, []byte("not a directory"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Chmod(readonly, 0o500); err != nil {
-		t.Fatal(err)
-	}
-	options.Core.Cwd = func() (string, error) { return readonly, nil }
+	options.Core.Cwd = func() (string, error) { return blocked, nil }
 
 	code := Run([]string{"--init"}, options)
 	if code == 0 {
@@ -35,7 +32,6 @@ func TestInitFailureExitsWithCodeOne(t *testing.T) {
 		t.Fatalf("the failure must be reported: %q", buffer.String())
 	}
 
-	_ = os.Chmod(readonly, 0o755)
 }
 
 func TestWriteFailureIsReportedAsAFailedRun(t *testing.T) {

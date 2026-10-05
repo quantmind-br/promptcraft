@@ -2,7 +2,7 @@ PACKAGE_NAME = promptcraft
 BIN_DIR ?= $(HOME)/.local/bin
 GO_TARGET = ./cmd/promptcraft
 
-.PHONY: install uninstall reinstall build test lint legacy-install legacy-uninstall
+.PHONY: install uninstall reinstall build test lint
 
 # Install (or update) the Go binary on the PATH. go build overwrites an existing
 # copy, so running make install again is just an update.
@@ -26,10 +26,3 @@ test:
 
 lint:
 	golangci-lint run ./...
-
-# The Python implementation is frozen in legacy/python and receives no features.
-legacy-install:
-	UV_VENV_CLEAR=1 pipx install --force ./legacy/python
-
-legacy-uninstall:
-	-pipx uninstall $(PACKAGE_NAME)

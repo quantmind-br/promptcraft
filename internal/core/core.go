@@ -1,8 +1,7 @@
 // Package core implements PromptCraft template discovery and processing.
 //
-// The behaviour mirrors the legacy Python implementation: hierarchical search
-// paths (project then user), $ARGUMENTS substitution, first-line description
-// extraction, mtime-based caches, and the same error codes.
+// Templates use project-first discovery, $ARGUMENTS substitution, first-line
+// descriptions and mtime-based caches with stable application error codes.
 package core
 
 import (

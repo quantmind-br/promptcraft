@@ -1,7 +1,7 @@
 // Package apperror defines the structured errors used by PromptCraft.
 //
 // Every error carries a human-readable message and an error code used for
-// programmatic handling, mirroring the legacy Python exception hierarchy.
+// programmatic handling by the CLI and terminal interface.
 package apperror
 
 // Error codes reported by PromptCraft errors.
