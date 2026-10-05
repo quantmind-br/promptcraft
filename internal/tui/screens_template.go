@@ -3,6 +3,7 @@ package tui
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -34,6 +35,7 @@ type TemplateScreen struct {
 	status          string
 	confirmedTarget string
 	confirmedDelete string
+	readOnly        bool
 }
 
 // NewTemplateScreen builds the editor.
@@ -51,6 +53,8 @@ func NewTemplateScreen(app *App, mode string, template core.CommandInfo) *Templa
 		focus:    "name",
 	}
 
+	screen.content = NewTextBuf("", max(1, app.width), max(1, app.height-8))
+
 	if mode == "edit" {
 		screen.name.SetValue(template.Name)
 		for index, option := range scopeOptions {
@@ -61,16 +65,15 @@ func NewTemplateScreen(app *App, mode string, template core.CommandInfo) *Templa
 		}
 		content, err := app.core.LoadTemplateContent(template.Path)
 		if err != nil {
+			// The buffer stays empty and read-only so typing cannot corrupt it.
+			screen.readOnly = true
 			screen.status = "✗ Could not read " + template.Path + ": " + err.Error()
 			screen.app.Notify("Could not read "+template.Path+": "+err.Error(), "error")
 			return screen
 		}
 		screen.content = NewTextBuf(content, max(1, app.width), max(1, app.height-8))
-	} else {
-		screen.content = NewTextBuf("", max(1, app.width), max(1, app.height-8))
-		if defaultScope(app) == core.ScopeUser {
-			screen.scope = 1
-		}
+	} else if defaultScope(app) == core.ScopeUser {
+		screen.scope = 1
 	}
 
 	return screen
@@ -105,14 +108,13 @@ func (s *TemplateScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
 		case "tab":
 			s.cycleFocus()
 			return s, nil
-		case "esc", "q":
-			if s.confirmedDelete != "" {
-				s.confirmedDelete = ""
-				s.status = "Delete cancelled."
-				return s, nil
+		case "esc":
+			return s, s.back()
+		case "q":
+			// q is a printable key inside the text fields.
+			if s.focus == "scope" {
+				return s, s.back()
 			}
-			s.app.Pop()
-			return s, nil
 		}
 
 		var cmd tea.Cmd
@@ -127,6 +129,9 @@ func (s *TemplateScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
 				s.scope = clamp(s.scope+delta(name), 0, len(scopeOptions)-1)
 			}
 		case "content":
+			if s.readOnly {
+				return s, nil
+			}
 			s.content.Focused = true
 			s.content.Update(message)
 		}
@@ -150,8 +155,25 @@ func (s *TemplateScreen) cycleFocus() {
 	}
 }
 
+// back cancels a pending delete or returns to the previous screen.
+func (s *TemplateScreen) back() tea.Cmd {
+	if s.confirmedDelete != "" {
+		s.confirmedDelete = ""
+		s.status = "Delete cancelled."
+		return nil
+	}
+	s.app.Pop()
+	return nil
+}
+
 // save writes the template, confirming an overwrite on the second Ctrl+S.
 func (s *TemplateScreen) save() {
+	if s.readOnly {
+		message := "Cannot save a template whose content could not be read."
+		s.status = "✗ " + message
+		s.app.Notify(message, "error")
+		return
+	}
 	s.confirmedDelete = ""
 	rawName := s.name.Value()
 	scope := scopeOptions[s.scope]
@@ -180,7 +202,13 @@ func (s *TemplateScreen) save() {
 	label := scopeLabels[scope]
 	isMove := s.mode == "edit" && filepath.Clean(target) != filepath.Clean(s.template.Path)
 
-	if exists(target) {
+	targetExists, statErr := statFile(target)
+	if statErr != nil {
+		s.status = "✗ Save failed: " + statErr.Error()
+		s.app.Notify(statErr.Error(), "error")
+		return
+	}
+	if targetExists {
 		sameFile := s.mode == "edit" && !isMove
 		if !sameFile && target != s.confirmedTarget {
 			s.confirmedTarget = target
@@ -204,7 +232,7 @@ func (s *TemplateScreen) save() {
 
 	if isMove {
 		original := s.template.Path
-		if filepath.Clean(original) != filepath.Clean(path) && exists(original) {
+		if originalExists, statErr := statFile(original); statErr == nil && originalExists && filepath.Clean(original) != filepath.Clean(path) {
 			if err := s.app.core.DeleteTemplate(original); err != nil {
 				s.app.Notify(fmt.Sprintf("Saved %s to %s scope, but could not remove the original %s: %s", filepath.Base(path), label, original, err.Error()), "warning")
 				s.app.Pop()
@@ -256,9 +284,17 @@ func (s *TemplateScreen) delete() {
 	s.app.Pop()
 }
 
-func exists(path string) bool {
+// statFile reports whether the path exists as a file. An unexpected stat failure
+// is returned as an error instead of being read as absence.
+func statFile(path string) (bool, error) {
 	info, err := os.Stat(path)
-	return err == nil && !info.IsDir()
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return false, nil
+		}
+		return false, err
+	}
+	return !info.IsDir(), nil
 }
 
 func clamp(value, low, high int) int {

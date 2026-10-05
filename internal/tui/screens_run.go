@@ -43,8 +43,8 @@ func (s *RunScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
 		return s, nil
 	case tea.KeyMsg:
 		name := keyName(message)
-		// Escape and quit have priority over the field, as in the legacy bindings.
-		if name == "esc" || name == "q" {
+		// Escape keeps priority; printable keys belong to the focused field.
+		if name == "esc" {
 			s.app.Pop()
 			return s, nil
 		}
