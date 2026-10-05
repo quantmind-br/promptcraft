@@ -1,0 +1,10 @@
+PromptCraft v0.1.0
+Editing template: /note  ·  [Project]
+name: note 
+> Project — .promptcraft/commands (this project)
+  User — ~/.promptcraft/commands (all projects)
+
+# Note
+⚠ Template 'note' already exists in the Project scope. Press Ctrl+S again to overwrite it.
+The first line of the content is shown as the description in the list. Use $ARGUMENTS where the typed arguments go. Save with Ctrl+S.
+tab field · ctrl+s save · ctrl+d delete · esc back (discard)

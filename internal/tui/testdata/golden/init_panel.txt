@@ -1,0 +1,8 @@
+PromptCraft v0.1.0
+╭──────────────────────────────────────────────────────────────────────────────────────────╮
+│ Initialize project structure (.promptcraft) — done, existing templates were not touched. │
+│                                                                                          │
+│   • Created example template: exemplo.md                                                 │
+│   • Directory already exists: .promptcraft/commands/                                     │
+╰──────────────────────────────────────────────────────────────────────────────────────────╯
+esc close

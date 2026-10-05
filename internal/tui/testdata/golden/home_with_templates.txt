@@ -1,0 +1,17 @@
+PromptCraft v0.1.0
+2 template(s)  ·  sources: .promptcraft/commands (project) and ~/.promptcraft/commands (user)
+commit  ·  Conventional commit  [Global]
+                                        
+review  ·  Code review  [Project]       
+                                        
+                                        
+                                        
+                                        
+                                        
+                                        
+                                        
+                                        
+                                        
+No template selected. Use Up/Down, then Enter to run.
+✓ Deleted /review [Project].
+↑/↓ move · enter run · n new · e edit · d delete · i init · v version · f refresh · ? help · q quit

@@ -1,0 +1,7 @@
+PromptCraft v0.1.0
+Run: /review  ·  [Project]  ·  Code review
+args: main.py 
+The $ARGUMENTS placeholder is replaced by the arguments you type here. Press Enter to run (copies to the clipboard by default); Tab leaves the field so s and d work.
+✓ Sent to clipboard via terminal (OSC 52, 13 chars). Press d to view it on screen, Esc to go back.
+/review sent to clipboard (OSC 52)
+type arguments · enter run + copy · tab leave field · s copy · d show · esc back

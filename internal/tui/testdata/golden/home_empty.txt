@@ -1,0 +1,15 @@
+PromptCraft v0.1.0
+No templates found.
+No items.
+         
+         
+         
+         
+         
+         
+         
+         
+         
+Press n to create a template, or i to initialize the project structure.
+
+↑/↓ move · enter run · n new · e edit · d delete · i init · v version · f refresh · ? help · q quit

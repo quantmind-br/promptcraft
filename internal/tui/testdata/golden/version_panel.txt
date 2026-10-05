@@ -1,0 +1,7 @@
+PromptCraft v0.1.0
+╭────────────────────╮
+│ Installed version  │
+│                    │
+│ PromptCraft v0.1.0 │
+╰────────────────────╯
+esc close
