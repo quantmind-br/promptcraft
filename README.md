@@ -15,15 +15,35 @@ PromptCraft CLI is a powerful command-line interface tool designed to help devel
 
 ## Installation
 
+### Go binary (recommended)
+
+The primary implementation is the Go port: a single binary with the cobra CLI and
+the Bubble Tea interface. It needs no runtime dependencies, and copies go through
+the host clipboard tools or an OSC 52 write when running inside herdr or over SSH.
+
+```bash
+go install github.com/quantmind-br/promptcraft/cmd/promptcraft@latest
+```
+
+From a clone of this repository:
+
+```bash
+go build -o promptcraft ./cmd/promptcraft
+./promptcraft --help
+```
+
+The Python package under `legacy/python/` is frozen as the parity reference for
+the port; it receives no new features.
+
 ### System Requirements
 
 - **Python:** 3.10 or higher
 - **Operating Systems:** Windows, macOS, Linux
 - **pipx:** Python application installer (<https://pipx.pypa.io>), or **pip** if you prefer a virtual environment
 
-### Quick Installation (pipx — Recommended)
+### Legacy Python installation (pipx)
 
-pipx is the recommended installer: it gives PromptCraft its own virtual environment and puts the `promptcraft` command on your PATH, with no dependency conflicts.
+pipx installs the legacy Python implementation: it gives PromptCraft its own virtual environment and puts the `promptcraft` command on your PATH, with no dependency conflicts.
 
 ```bash
 # Install pipx if you don't have it (Python 3.10+)
@@ -156,22 +176,34 @@ pipx install .
 
 ```
 promptcraft/
-├── src/
-│   └── promptcraft/
-│       ├── __init__.py
-│       ├── main.py          # CLI entry point
-│       ├── core.py          # Core template processing
-│       └── exceptions.py    # Custom exceptions
-├── tests/                   # Test files (to be created)
-├── pyproject.toml          # Project configuration
-├── README.md              # This file
-└── .gitignore            # Git ignore rules
+├── cmd/promptcraft/         # Go entry point (cobra)
+├── internal/
+│   ├── core/                # discovery, $ARGUMENTS substitution, caches
+│   ├── clipboard/           # native + OSC 52 routes and detection
+│   ├── cli/                 # CLI behaviour and messages
+│   ├── tui/                 # Bubble Tea screens
+│   ├── apperror/            # structured errors with error codes
+│   ├── style/               # terminal colours
+│   └── version/             # reported version
+├── tests/parity/            # Go vs legacy parity harness
+├── legacy/python/           # frozen Python implementation and its suite
+├── go.mod                   # Go module configuration
+├── README.md                # This file
+└── .gitignore               # Git ignore rules
 ```
 
 ### Running Tests
 
 ```bash
-pytest
+go test ./...                          # unit tests, TUI golden files, parity harness
+go test ./internal/tui/ -rewrite-golden # regenerate the golden files
+golangci-lint run ./...
+```
+
+The legacy Python suite still runs from `legacy/python`:
+
+```bash
+cd legacy/python && pytest
 ```
 
 ### Running the CLI
