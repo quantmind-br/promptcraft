@@ -3,6 +3,7 @@
 package clipboard
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
 	"os"
@@ -31,11 +32,14 @@ var TTYPath = "/dev/tty"
 // Deps holds the environment snapshot and the injectable backends, so tests can
 // run without touching a real clipboard or terminal.
 type Deps struct {
-	Env         map[string]string
-	FileExists  func(string) bool
-	TTYPath     string
-	NativeCopy  func(text string) error
-	OSC52Writer func(text string) error
+	Env        map[string]string
+	FileExists func(string) bool
+	TTYPath    string
+	NativeCopy func(text string) error
+	// NativeCopyWithContext is preferred when the backend can be cancelled, so a
+	// timed-out copy does not leave an orphan goroutine behind.
+	NativeCopyWithContext func(ctx context.Context, text string) error
+	OSC52Writer           func(text string) error
 }
 
 // Default returns deps wired to the process environment and the real backends.
@@ -84,7 +88,9 @@ func WriteToTTY(d Deps, text string) error {
 // process, so the copy goes through the terminal. A failing native copy also
 // falls back to OSC 52. Returns an empty string when nothing was copied.
 func Copy(text string, d Deps) string {
-	terminalOnly := PreferOSC52(d) || Headless(d)
+	mode := strings.ToLower(strings.TrimSpace(d.Env["PROMPTCRAFT_CLIPBOARD"]))
+	// An explicit mode is authoritative; otherwise the environment decides.
+	terminalOnly := mode == RouteOSC52 || (mode != RouteNative && (PreferOSC52(d) || Headless(d)))
 	if terminalOnly && ClipboardDisabled(d) {
 		return ""
 	}
@@ -98,6 +104,11 @@ func Copy(text string, d Deps) string {
 }
 
 func copyNative(d Deps, text string) bool {
+	if d.NativeCopyWithContext != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), NativeTimeout)
+		defer cancel()
+		return d.NativeCopyWithContext(ctx, text) == nil
+	}
 	if d.NativeCopy == nil {
 		return false
 	}
@@ -161,6 +172,10 @@ func ClipboardDisabled(d Deps) bool {
 func Headless(d Deps) bool {
 	if ClipboardDisabled(d) {
 		return true
+	}
+	// A Wayland session has a working native clipboard even without X11.
+	if d.Env["WAYLAND_DISPLAY"] != "" {
+		return false
 	}
 	if value, ok := d.Env["DISPLAY"]; ok && value == "" {
 		return true
