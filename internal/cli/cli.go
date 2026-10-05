@@ -27,13 +27,40 @@ type Options struct {
 	Color         bool
 }
 
+// out aggregates writes and remembers the first failure, so a broken pipe is not
+// reported as a successful run.
+type out struct {
+	writer  io.Writer
+	printer *style.Printer
+	err     error
+}
+
+func (o *out) line(text string) {
+	if o.err != nil {
+		return
+	}
+	if _, err := fmt.Fprintln(o.writer, text); err != nil {
+		o.err = err
+	}
+}
+
+func (o *out) printf(format string, args ...any) {
+	if o.err != nil {
+		return
+	}
+	if _, err := fmt.Fprintf(o.writer, format, args...); err != nil {
+		o.err = err
+	}
+}
+
 // Run executes the CLI and returns the process exit code.
 func Run(args []string, opts Options) int {
-	out := opts.Out
-	if out == nil {
-		out = io.Discard
+	writer := opts.Out
+	if writer == nil {
+		writer = io.Discard
 	}
 	printer := &style.Printer{Enabled: opts.Color}
+	output := &out{writer: writer, printer: printer}
 
 	if opts.Core == nil {
 		opts.Core = core.New()
@@ -42,7 +69,7 @@ func Run(args []string, opts Options) int {
 		opts.IsInteractive = func() bool { return false }
 	}
 	if opts.LaunchTUI == nil {
-		opts.LaunchTUI = func() error { return tui.Run(opts.Core, opts.Deps, out) }
+		opts.LaunchTUI = func() error { return tui.Run(opts.Core, opts.Deps, writer) }
 	}
 
 	var exitCode int
@@ -61,34 +88,33 @@ func Run(args []string, opts Options) int {
 			listFlag, _ := flags.GetBool("list")
 
 			if initFlag {
-				initializeProject(opts.Core, out, printer)
-				exitCode = 0
+				exitCode = initializeProject(opts.Core, output)
 				return
 			}
 			if listFlag {
-				listCommands(opts.Core, out, printer)
-				exitCode = 0
+				listCommands(opts.Core, output)
+				exitCode = exitForWriteError(output)
 				return
 			}
 			if len(positional) == 0 {
 				if !stdoutFlag && opts.IsInteractive() {
 					if err := opts.LaunchTUI(); err != nil {
-						writeLine(out, printer.Red("Interactive interface unavailable: "+err.Error()))
-						writeLine(out, printer.Red("Run 'promptcraft --help' for command-line usage"))
+						output.line(output.printer.Red("Interactive interface unavailable: " + err.Error()))
+						output.line(output.printer.Red("Run 'promptcraft --help' for command-line usage"))
 						exitCode = 1
 						return
 					}
-					exitCode = 0
+					exitCode = exitForWriteError(output)
 					return
 				}
-				writeLine(out, printer.Red("❌ Command name is required"))
-				writeLine(out, printer.Red("Use 'promptcraft --help' for usage information"))
+				output.line(output.printer.Red("❌ Command name is required"))
+				output.line(output.printer.Red("Use 'promptcraft --help' for usage information"))
 				exitCode = 1
 				return
 			}
 
 			commandName := strings.TrimPrefix(positional[0], "/")
-			exitCode = executeCommand(opts.Core, opts.Deps, commandName, positional[1:], stdoutFlag, out, printer)
+			exitCode = executeCommand(opts.Core, opts.Deps, commandName, positional[1:], stdoutFlag, output)
 		},
 	}
 
@@ -96,15 +122,23 @@ func Run(args []string, opts Options) int {
 	command.Flags().Bool("init", false, "Initialize PromptCraft project structure")
 	command.Flags().Bool("list", false, "List all available commands")
 	command.SetArgs(args)
-	command.SetOut(out)
-	command.SetErr(out)
+	command.SetOut(writer)
+	command.SetErr(writer)
 	command.SetVersionTemplate(fmt.Sprintf("PromptCraft, version %s\n", version.Version))
 
 	if err := command.Execute(); err != nil {
-		writeLine(out, printer.Red("❌ "+err.Error()))
+		output.line(output.printer.Red("❌ " + err.Error()))
 		return 1
 	}
 	return exitCode
+}
+
+// exitForWriteError keeps a successful path at 0 and reports delivery failures.
+func exitForWriteError(output *out) int {
+	if output.err != nil {
+		return 1
+	}
+	return 0
 }
 
 func longHelp() string {
@@ -131,81 +165,83 @@ Options:
 `
 }
 
-func executeCommand(processor *core.Processor, deps clipboard.Deps, commandName string, arguments []string, stdoutFlag bool, out io.Writer, printer *style.Printer) int {
+func executeCommand(processor *core.Processor, deps clipboard.Deps, commandName string, arguments []string, stdoutFlag bool, output *out) int {
 	result, err := processor.ProcessCommand(commandName, arguments)
 	if err != nil {
 		var perr *apperror.Error
 		if errors.As(err, &perr) && perr.Code() == apperror.CodeCommandNotFound {
-			writeLine(out, printer.Red(fmt.Sprintf("❌ Command '/%s' not found", commandName)))
-			writeLine(out, printer.Red("Run 'promptcraft --list' to see available commands"))
+			output.line(output.printer.Red(fmt.Sprintf("❌ Command '/%s' not found", commandName)))
+			output.line(output.printer.Red("Run 'promptcraft --list' to see available commands"))
 			return 1
 		}
 		if errors.As(err, &perr) {
-			writeLine(out, printer.Red("❌ "+perr.Message))
+			output.line(output.printer.Red("❌ " + perr.Message))
 			return 1
 		}
-		writeLine(out, printer.Red("❌ Unexpected error occurred"))
+		output.line(output.printer.Red("❌ Unexpected error occurred"))
 		return 1
 	}
 
 	if stdoutFlag {
-		writeLine(out, printer.Green(fmt.Sprintf("✅ Prompt for '/%s' generated:", commandName)))
-		writeLine(out, result)
-		return 0
+		output.line(output.printer.Green(fmt.Sprintf("✅ Prompt for '/%s' generated:", commandName)))
+		output.line(result)
+		return exitForWriteError(output)
 	}
 
 	route := clipboard.Copy(result, deps)
 	if route != "" {
 		if route == clipboard.RouteOSC52 {
 			// OSC 52 is fire-and-forget: the terminal never confirms the copy.
-			writeLine(out, printer.Green(fmt.Sprintf("✅ Prompt for '/%s' sent to clipboard via terminal (OSC 52)!", commandName)))
+			output.line(output.printer.Green(fmt.Sprintf("✅ Prompt for '/%s' sent to clipboard via terminal (OSC 52)!", commandName)))
 		} else {
-			writeLine(out, printer.Green(fmt.Sprintf("✅ Prompt for '/%s' copied to clipboard!", commandName)))
+			output.line(output.printer.Green(fmt.Sprintf("✅ Prompt for '/%s' copied to clipboard!", commandName)))
 		}
-		return 0
+		return exitForWriteError(output)
 	}
 
-	writeLine(out, printer.Yellow("⚠️ Clipboard unavailable, use --stdout instead"))
-	writeLine(out, printer.Green(fmt.Sprintf("✅ Prompt for '/%s' generated:", commandName)))
-	writeLine(out, result)
-	return 0
+	output.line(output.printer.Yellow("⚠️ Clipboard unavailable, use --stdout instead"))
+	output.line(output.printer.Green(fmt.Sprintf("✅ Prompt for '/%s' generated:", commandName)))
+	output.line(result)
+	return exitForWriteError(output)
 }
 
-func initializeProject(processor *core.Processor, out io.Writer, printer *style.Printer) {
+func initializeProject(processor *core.Processor, output *out) int {
 	result := processor.InitProject()
 	if result.Error != "" {
 		if strings.Contains(result.Error, "Permission denied") {
-			writeLine(out, printer.Red("❌ Permission denied: Cannot create directories"))
-			writeLine(out, printer.Red("Try running with appropriate permissions"))
-			return
+			output.line(output.printer.Red("❌ Permission denied: Cannot create directories"))
+			output.line(output.printer.Red("Try running with appropriate permissions"))
+			return 1
 		}
-		writeLine(out, printer.Red("❌ "+result.Error))
-		return
+		output.line(output.printer.Red("❌ " + result.Error))
+		return 1
 	}
 
-	writeLine(out, printer.Green("✅ PromptCraft initialized! Created .promptcraft/commands/ with example template"))
-	writeLine(out, "\n📁 Project structure:")
+	output.line(output.printer.Green("✅ PromptCraft initialized! Created .promptcraft/commands/ with example template"))
+	output.line("\n📁 Project structure:")
 	for _, item := range result.Items {
-		writef(out, "  • %s\n", item)
+		output.printf("  • %s\n", item)
 	}
 
-	writeLine(out, "\n👉 Next steps:")
-	writeLine(out, "  1. Try the example: promptcraft exemplo 'hello world'")
-	writeLine(out, "  2. Edit .promptcraft/commands/exemplo.md to customize")
-	writeLine(out, "  3. Create new .md files for your own templates")
-	writeLine(out, "  4. Use 'promptcraft --help' for more options")
+	output.line("\n👉 Next steps:")
+	output.line("  1. Try the example: promptcraft exemplo 'hello world'")
+	output.line("  2. Edit .promptcraft/commands/exemplo.md to customize")
+	output.line("  3. Create new .md files for your own templates")
+	output.line("  4. Use 'promptcraft --help' for more options")
+
+	return exitForWriteError(output)
 }
 
-func listCommands(processor *core.Processor, out io.Writer, printer *style.Printer) {
+func listCommands(processor *core.Processor, output *out) {
 	commands := processor.DiscoverCommands()
 	if len(commands) == 0 {
-		writeLine(out, printer.Yellow("No commands found"))
-		writeLine(out, "Run 'promptcraft --init' to create examples.")
+		output.line(output.printer.Yellow("No commands found"))
+		output.line("Run 'promptcraft --init' to create examples.")
 		return
 	}
 
-	writeLine(out, printer.Green("Available Commands ("+fmt.Sprint(len(commands))+" found):"))
-	writeLine(out, "")
+	output.line(output.printer.Green("Available Commands (" + fmt.Sprint(len(commands)) + " found):"))
+	output.line("")
 
 	maxName, maxSource := len("Command"), len("Source")
 	for _, command := range commands {
@@ -218,22 +254,16 @@ func listCommands(processor *core.Processor, out io.Writer, printer *style.Print
 	}
 
 	header := fmt.Sprintf("%-*s %-*s %s", maxName, "Command", maxSource, "Source", "Description")
-	writeLine(out, printer.Cyan(header))
-	writeLine(out, printer.Cyan(strings.Repeat("-", len(header))))
+	output.line(output.printer.Cyan(header))
+	output.line(output.printer.Cyan(strings.Repeat("-", len(header))))
 
 	for _, command := range commands {
 		paddedSource := fmt.Sprintf("%-*s", maxSource, command.Source)
 		if command.Source == core.SourceProject {
-			paddedSource = printer.Green(paddedSource)
+			paddedSource = output.printer.Green(paddedSource)
 		} else {
-			paddedSource = printer.Blue(paddedSource)
+			paddedSource = output.printer.Blue(paddedSource)
 		}
-		writef(out, "%-*s %s %s\n", maxName, command.Name, paddedSource, command.Description)
+		output.printf("%-*s %s %s\n", maxName, command.Name, paddedSource, command.Description)
 	}
 }
-
-// writeLine and writef ignore write errors: the CLI reports prompt text, and a
-// failed write means the caller is gone.
-func writeLine(out io.Writer, text string) { _, _ = fmt.Fprintln(out, text) }
-
-func writef(out io.Writer, format string, args ...any) { _, _ = fmt.Fprintf(out, format, args...) }
