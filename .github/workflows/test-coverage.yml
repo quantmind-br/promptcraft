@@ -10,6 +10,9 @@ on:
 # Go port and receives no new features.
 jobs:
   test:
+    permissions:
+      contents: read
+    timeout-minutes: 20
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false

@@ -8,6 +8,9 @@ on:
 
 jobs:
   test:
+    permissions:
+      contents: read
+    timeout-minutes: 20
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -38,6 +41,7 @@ jobs:
       run: go test -race -coverprofile=coverage.out ./...
 
     - name: Coverage gate (>= 85%)
+      shell: bash
       run: |
         total=$(go tool cover -func=coverage.out | awk 'END {print $3}')
         value=${total%.*}
