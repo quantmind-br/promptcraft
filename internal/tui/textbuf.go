@@ -4,84 +4,77 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/ansi"
 )
 
-// TextBuf is a small multiline text buffer used by the template editor. It is
-// kept in this package instead of a third-party widget so the editing state is
-// deterministic and testable.
+type bufferState struct {
+	text      string
+	line, col int
+}
+
+// TextBuf is a deterministic multiline editor with bounded undo and cell-aware scrolling.
 type TextBuf struct {
-	Lines     []string
-	CaretLine int
-	CaretCol  int
-	Focused   bool
-
-	width  int
-	height int
+	Lines               []string
+	CaretLine, CaretCol int
+	Focused             bool
+	width, height       int
+	undo, redo          []bufferState
 }
 
-// NewTextBuf creates a buffer for the given content and geometry.
 func NewTextBuf(content string, width, height int) TextBuf {
-	lines := strings.Split(content, "\n")
-	if len(lines) == 0 {
-		lines = []string{""}
-	}
-	return TextBuf{Lines: lines, width: width, height: height}
+	return TextBuf{Lines: strings.Split(strings.ReplaceAll(content, "\r\n", "\n"), "\n"), width: width, height: height}
 }
-
-// Text returns the buffer content.
-func (b *TextBuf) Text() string { return strings.Join(b.Lines, "\n") }
-
-// SetSize updates the geometry used for rendering and scrolling.
-func (b *TextBuf) SetSize(width, height int) {
-	if width > 0 {
-		b.width = width
+func (b *TextBuf) Text() string              { return strings.Join(b.Lines, "\n") }
+func (b *TextBuf) SetSize(width, height int) { b.width, b.height = max(1, width), max(1, height) }
+func (b *TextBuf) ensure() {
+	if len(b.Lines) == 0 {
+		b.Lines = []string{""}
 	}
-	if height > 0 {
-		b.height = height
-	}
+	b.CaretLine = clamp(b.CaretLine, 0, len(b.Lines)-1)
+	b.CaretCol = clamp(b.CaretCol, 0, len([]rune(b.Lines[b.CaretLine])))
 }
-
-// InsertRune writes a printable rune at the caret.
 func (b *TextBuf) InsertRune(r rune) {
-	line := b.Lines[b.CaretLine]
-	runes := []rune(line)
+	b.ensure()
+	runes := []rune(b.Lines[b.CaretLine])
 	runes = append(runes[:b.CaretCol], append([]rune{r}, runes[b.CaretCol:]...)...)
 	b.Lines[b.CaretLine] = string(runes)
 	b.CaretCol++
 }
-
-// Backspace removes the character before the caret.
 func (b *TextBuf) Backspace() {
+	b.ensure()
 	if b.CaretCol > 0 {
-		line := []rune(b.Lines[b.CaretLine])
-		line = append(line[:b.CaretCol-1], line[b.CaretCol:]...)
-		b.Lines[b.CaretLine] = string(line)
+		runes := []rune(b.Lines[b.CaretLine])
+		b.Lines[b.CaretLine] = string(append(runes[:b.CaretCol-1], runes[b.CaretCol:]...))
 		b.CaretCol--
-		return
+	} else if b.CaretLine > 0 {
+		previous := b.Lines[b.CaretLine-1]
+		b.Lines[b.CaretLine-1] = previous + b.Lines[b.CaretLine]
+		b.Lines = append(b.Lines[:b.CaretLine], b.Lines[b.CaretLine+1:]...)
+		b.CaretLine--
+		b.CaretCol = len([]rune(previous))
 	}
-	if b.CaretLine == 0 {
-		return
-	}
-	previous := b.Lines[b.CaretLine-1]
-	b.Lines[b.CaretLine-1] = previous + b.Lines[b.CaretLine]
-	b.Lines = append(b.Lines[:b.CaretLine], b.Lines[b.CaretLine+1:]...)
-	b.CaretLine--
-	b.CaretCol = len([]rune(previous))
 }
-
-// InsertNewline splits the current line at the caret.
+func (b *TextBuf) deleteForward() {
+	b.ensure()
+	runes := []rune(b.Lines[b.CaretLine])
+	if b.CaretCol < len(runes) {
+		b.Lines[b.CaretLine] = string(append(runes[:b.CaretCol], runes[b.CaretCol+1:]...))
+	} else if b.CaretLine < len(b.Lines)-1 {
+		b.Lines[b.CaretLine] += b.Lines[b.CaretLine+1]
+		b.Lines = append(b.Lines[:b.CaretLine+1], b.Lines[b.CaretLine+2:]...)
+	}
+}
 func (b *TextBuf) InsertNewline() {
-	line := []rune(b.Lines[b.CaretLine])
-	rest := string(line[b.CaretCol:])
-	b.Lines[b.CaretLine] = string(line[:b.CaretCol])
+	b.ensure()
+	runes := []rune(b.Lines[b.CaretLine])
+	rest := string(runes[b.CaretCol:])
+	b.Lines[b.CaretLine] = string(runes[:b.CaretCol])
 	b.Lines = append(b.Lines[:b.CaretLine+1], append([]string{rest}, b.Lines[b.CaretLine+1:]...)...)
 	b.CaretLine++
 	b.CaretCol = 0
 }
-
-// MoveCaret handles arrow navigation inside the buffer.
 func (b *TextBuf) MoveCaret(direction string) {
-	runes := []rune(b.Lines[b.CaretLine])
+	b.ensure()
 	switch direction {
 	case "left":
 		if b.CaretCol > 0 {
@@ -91,99 +84,123 @@ func (b *TextBuf) MoveCaret(direction string) {
 			b.CaretCol = len([]rune(b.Lines[b.CaretLine]))
 		}
 	case "right":
-		if b.CaretCol < len(runes) {
+		if b.CaretCol < len([]rune(b.Lines[b.CaretLine])) {
 			b.CaretCol++
 		} else if b.CaretLine < len(b.Lines)-1 {
 			b.CaretLine++
 			b.CaretCol = 0
 		}
 	case "up":
-		if b.CaretLine > 0 {
-			b.CaretLine--
-			if b.CaretCol > len([]rune(b.Lines[b.CaretLine])) {
-				b.CaretCol = len([]rune(b.Lines[b.CaretLine]))
-			}
-		}
+		b.CaretLine = max(0, b.CaretLine-1)
 	case "down":
-		if b.CaretLine < len(b.Lines)-1 {
-			b.CaretLine++
-			if b.CaretCol > len([]rune(b.Lines[b.CaretLine])) {
-				b.CaretCol = len([]rune(b.Lines[b.CaretLine]))
-			}
-		}
+		b.CaretLine = min(len(b.Lines)-1, b.CaretLine+1)
+	case "home", "ctrl+a":
+		b.CaretCol = 0
+	case "end", "ctrl+e":
+		b.CaretCol = len([]rune(b.Lines[b.CaretLine]))
+	case "pgup":
+		b.CaretLine = max(0, b.CaretLine-max(1, b.height))
+	case "pgdown":
+		b.CaretLine = min(len(b.Lines)-1, b.CaretLine+max(1, b.height))
 	}
+	b.ensure()
 }
-
-// Update forwards a key message to the buffer when it has focus.
+func (b *TextBuf) snapshot() bufferState { return bufferState{b.Text(), b.CaretLine, b.CaretCol} }
+func (b *TextBuf) restore(state bufferState) {
+	b.Lines = strings.Split(state.text, "\n")
+	b.CaretLine, b.CaretCol = state.line, state.col
+	b.ensure()
+}
 func (b *TextBuf) Update(msg tea.Msg) {
 	key, ok := msg.(tea.KeyMsg)
 	if !ok || !b.Focused {
 		return
 	}
-
+	b.ensure()
+	before := b.snapshot()
+	name := key.String()
+	if name == "ctrl+z" {
+		if len(b.undo) > 0 {
+			b.redo = append(b.redo, before)
+			b.restore(b.undo[len(b.undo)-1])
+			b.undo = b.undo[:len(b.undo)-1]
+		}
+		return
+	}
+	if name == "ctrl+y" {
+		if len(b.redo) > 0 {
+			b.undo = append(b.undo, before)
+			b.restore(b.redo[len(b.redo)-1])
+			b.redo = b.redo[:len(b.redo)-1]
+		}
+		return
+	}
 	switch key.Type {
 	case tea.KeyEnter:
 		b.InsertNewline()
 	case tea.KeyBackspace, tea.KeyCtrlH:
 		b.Backspace()
+	case tea.KeyDelete:
+		b.deleteForward()
 	case tea.KeySpace:
 		b.InsertRune(' ')
 	case tea.KeyRunes:
-		if len(key.Runes) > 0 {
-			for _, r := range key.Runes {
-				b.InsertRune(r)
+		for _, r := range strings.ReplaceAll(string(key.Runes), "\r\n", "\n") {
+			switch r {
+			case '\n', '\r':
+				b.InsertNewline()
+			case '\t':
+				b.InsertRune(' ')
+				b.InsertRune(' ')
+				b.InsertRune(' ')
+				b.InsertRune(' ')
+			default:
+				if r >= 32 && r != 127 {
+					b.InsertRune(r)
+				}
 			}
 		}
-	case tea.KeyLeft, tea.KeyRight, tea.KeyUp, tea.KeyDown:
-		b.MoveCaret(strings.ToLower(key.String()))
+	default:
+		b.MoveCaret(name)
+	}
+	if before.text != b.Text() {
+		b.undo = append(b.undo, before)
+		if len(b.undo) > 100 {
+			b.undo = b.undo[len(b.undo)-100:]
+		}
+		b.redo = nil
 	}
 }
-
-// View renders the visible window of the buffer.
-// View renders the visible window of the buffer, wrapping to its width and
-// marking the caret position when the buffer has focus.
 func (b *TextBuf) View() string {
+	b.ensure()
 	if b.height <= 0 {
-		return strings.Join(b.Lines, "\n")
+		return b.Text()
 	}
-
-	start := 0
-	if b.CaretLine >= b.height {
-		start = b.CaretLine - b.height + 1
-	}
+	start := max(0, b.CaretLine-b.height+1)
 	end := min(start+b.height, len(b.Lines))
-
-	rendered := make([]string, 0, end-start)
-	for index := start; index < end; index++ {
-		runes := []rune(b.Lines[index])
-		startCol := 0
-		if b.width > 0 && len(runes) > b.width {
-			if index == b.CaretLine {
-				startCol = max(0, min(len(runes)-b.width, b.CaretCol-b.width+1))
-			} else {
-				startCol = 0
+	lines := make([]string, 0, end-start)
+	for i := start; i < end; i++ {
+		line := b.Lines[i]
+		offset := 0
+		if i == b.CaretLine {
+			runes := []rune(line)
+			before := string(runes[:b.CaretCol])
+			cursor, after := " ", ""
+			if b.CaretCol < len(runes) {
+				cursor = string(runes[b.CaretCol])
+				after = string(runes[b.CaretCol+1:])
+			}
+			if b.Focused {
+				line = before + caretStyle.Render(cursor) + after
+			}
+			if b.width > 0 {
+				offset = max(0, ansi.StringWidth(before)+max(1, ansi.StringWidth(cursor))-b.width)
 			}
 		}
-		stop := min(startCol+b.width, len(runes))
-		if b.width <= 0 {
-			stop = len(runes)
+		if b.width > 0 {
+			line = ansi.Cut(line, offset, offset+b.width)
 		}
-
-		visible := runes[startCol:stop]
-		if b.Focused && index == b.CaretLine && startCol <= b.CaretCol && b.CaretCol < stop {
-			parts := make([]string, 0, len(visible))
-			for offset, r := range visible {
-				text := string(r)
-				if startCol+offset == b.CaretCol {
-					text = caretStyle.Render(text)
-				}
-				parts = append(parts, text)
-			}
-			rendered = append(rendered, strings.Join(parts, ""))
-			continue
-		}
-		rendered = append(rendered, string(visible))
+		lines = append(lines, line)
 	}
-
-	return strings.Join(rendered, "\n")
+	return strings.Join(lines, "\n")
 }

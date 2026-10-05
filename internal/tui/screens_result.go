@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
@@ -9,48 +10,46 @@ import (
 	"github.com/quantmind-br/promptcraft/internal/clipboard"
 )
 
-// ResultScreen shows a generated prompt read-only with a copy action.
+// ResultScreen presents wrapped text without modifying what is copied.
 type ResultScreen struct {
-	app      *App
-	name     string
-	content  string
-	copied   bool
-	status   string
-	viewport viewport.Model
+	app                   *App
+	name, content, status string
+	copied                bool
+	viewport              viewport.Model
 }
 
-// NewResultScreen builds the result view.
 func NewResultScreen(app *App, name, content string, copied bool) *ResultScreen {
-	view := viewport.New(max(1, app.width), max(1, app.height-5))
-	view.SetContent(content)
-
-	status := "Clipboard was not used for this result. Press c to copy it."
+	screen := &ResultScreen{app: app, name: name, content: content, copied: copied, viewport: viewport.New(1, 1)}
+	screen.status = "Clipboard was not used for this result. Press c to copy it."
 	if copied {
-		status = "✓ Already copied to the clipboard. Press c to copy again."
+		screen.status = "✓ Already copied to the clipboard. Press c to copy again."
 	}
-
-	return &ResultScreen{app: app, name: name, content: content, copied: copied, status: status, viewport: view}
+	screen.resize()
+	return screen
 }
-
-// Init prepares the viewport.
 func (s *ResultScreen) Init() tea.Cmd { return nil }
-
-// Update handles scrolling and the copy/back shortcuts.
+func (s *ResultScreen) resize() {
+	offset := s.viewport.YOffset
+	s.viewport.Width = max(1, s.app.bodyWidth()-4)
+	s.viewport.Height = max(1, s.resultHeight())
+	s.viewport.SetContent(wrapText(s.content, s.viewport.Width))
+	s.viewport.SetYOffset(offset)
+}
 func (s *ResultScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
 	switch message := msg.(type) {
 	case tea.WindowSizeMsg:
-		s.viewport.Width = max(1, message.Width)
-		s.viewport.Height = max(1, message.Height-5)
+		s.resize()
 		return s, nil
 	case tea.KeyMsg:
 		switch keyName(message) {
-		case "c":
+		case "c", "ctrl+s":
 			route := clipboard.Copy(s.content, s.app.deps)
 			if route == "" {
-				s.status = "✗ Could not copy to the clipboard. The text is shown here — select it with your terminal, or use --stdout on the CLI."
-				s.app.Notify("Clipboard copy failed", "error")
+				s.status = "✗ Could not copy to the clipboard. Select the text, or use --stdout."
+				s.app.Notify("Clipboard copy failed · the preview remains available", "error")
 				return s, nil
 			}
+			s.copied = true
 			status, toast := copyFeedback(route, s.name, len([]rune(s.content)))
 			s.status = status
 			s.app.Notify(toast, "information")
@@ -58,22 +57,34 @@ func (s *ResultScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
 		case "esc", "q":
 			s.app.Pop()
 			return s, nil
+		case "home":
+			s.viewport.GotoTop()
+			return s, nil
+		case "end":
+			s.viewport.GotoBottom()
+			return s, nil
 		}
-
-		var cmd tea.Cmd
-		s.viewport, cmd = s.viewport.Update(message)
-		return s, cmd
 	}
-	return s, nil
+	var cmd tea.Cmd
+	s.viewport, cmd = s.viewport.Update(msg)
+	return s, cmd
+}
+func (s *ResultScreen) resultHeight() int {
+	if s.app.bodyHeight() < 8 {
+		return max(1, s.app.bodyHeight()-3)
+	}
+	return max(1, s.app.bodyHeight()-5)
 }
 
-// View renders the title, the content and the status line.
 func (s *ResultScreen) View() string {
-	title := fmt.Sprintf("Result for /%s  ·  %d chars", s.name, len([]rune(s.content)))
-	return fmt.Sprintf("%s\n%s\n%s", title, s.viewport.View(), statusStyle.Render(s.status))
+	width := s.app.bodyWidth()
+	title := fmt.Sprintf("/%s · %d characters · %d lines", s.name, len([]rune(s.content)), strings.Count(s.content, "\n")+1)
+	progress := dimStyle.Render(fmt.Sprintf("Scroll %3.0f%% · ↑/↓ or PgUp/PgDn", s.viewport.ScrollPercent()*100))
+	if s.app.bodyHeight() < 8 {
+		return headerStyle.Render(fitLine(title, width)) + "\n" + s.viewport.View() + "\n" + progress + "\n" + fitLine(s.status, width)
+	}
+	return pane(title, s.viewport.View(), width, s.app.bodyHeight()-2, true) + "\n" + progress + "\n" + fitLine(statusStyle.Render(s.status), width)
 }
-
-// Hints lists the result keymap.
 func (s *ResultScreen) Hints() []Hint {
-	return []Hint{{"c", "copy to clipboard"}, {"esc", "back"}}
+	return []Hint{{"↑/↓", "scroll"}, {"pgup/pgdn", "page"}, {"home/end", "jump"}, {"c", "copy"}, {"esc", "back"}}
 }

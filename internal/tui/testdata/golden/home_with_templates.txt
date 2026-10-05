@@ -1,17 +1,23 @@
-PromptCraft v0.1.0
-2 template(s)  ·  sources: .promptcraft/commands (project) and ~/.promptcraft/commands (user)
-commit  ·  Conventional commit  [Global]
-                                        
-review  ·  Code review  [Project]       
-                                        
-                                        
-                                        
-                                        
-                                        
-                                        
-                                        
-                                        
-                                        
-No template selected. Use Up/Down, then Enter to run.
+◆ PromptCraft / Template library                                        v0.1.0
+──────────────────────────────────────────────────────────────────────────────
+╭────────────────────────────────────────────────────────────────────────────╮
+│ Templates · 2                                                              │
+│ Search  / name, description or source                                      │
+│ › /commit  [Global]                                                        │
+│   /review  [Project]                                                       │
+│                                                                            │
+│                                                                            │
+╰────────────────────────────────────────────────────────────────────────────╯
+╭────────────────────────────────────────────────────────────────────────────╮
+│ Preview · Enter to run                                                     │
+│ /commit  [Global]                                                          │
+│ # Conventional commit                                                      │
+│                                                                            │
+╰────────────────────────────────────────────────────────────────────────────╯
 ✓ Deleted /review [Project].
-↑/↓ move · enter run · n new · e edit · d delete · i init · v version · f refresh · ? help · q quit
+
+
+
+Ready · ? opens the keyboard guide
+? help · q quit · ↑/↓ move · enter run · / search · n new · e edit · d delete
+i setup · f refresh

@@ -25,23 +25,26 @@ var scopeOptions = []string{core.ScopeProject, core.ScopeUser}
 
 // TemplateScreen creates or edits a template in the chosen scope.
 type TemplateScreen struct {
-	app             *App
-	mode            string // "create" or "edit"
-	template        core.CommandInfo
-	name            textinput.Model
-	scope           int
-	content         TextBuf
-	focus           string // "name", "scope" or "content"
-	status          string
-	confirmedTarget string
-	confirmedDelete string
-	readOnly        bool
+	app                         *App
+	mode                        string // "create" or "edit"
+	template                    core.CommandInfo
+	name                        textinput.Model
+	scope                       int
+	content                     TextBuf
+	focus                       string // "name", "scope" or "content"
+	status                      string
+	confirmedTarget             string
+	confirmedDelete             string
+	readOnly                    bool
+	initialName, initialContent string
+	initialScope                int
+	discardPending, quitPending bool
 }
 
 // NewTemplateScreen builds the editor.
 func NewTemplateScreen(app *App, mode string, template core.CommandInfo) *TemplateScreen {
 	input := textinput.New()
-	input.Prompt = "name: "
+	input.Prompt = "Name  / "
 	input.Placeholder = "my-command"
 	input.Focus()
 
@@ -53,7 +56,7 @@ func NewTemplateScreen(app *App, mode string, template core.CommandInfo) *Templa
 		focus:    "name",
 	}
 
-	screen.content = NewTextBuf("", max(1, app.width), max(1, app.height-8))
+	screen.content = NewTextBuf("", max(1, app.bodyWidth()-4), max(1, app.bodyHeight()-8))
 
 	if mode == "edit" {
 		screen.name.SetValue(template.Name)
@@ -71,11 +74,14 @@ func NewTemplateScreen(app *App, mode string, template core.CommandInfo) *Templa
 			screen.app.Notify("Could not read "+template.Path+": "+err.Error(), "error")
 			return screen
 		}
-		screen.content = NewTextBuf(content, max(1, app.width), max(1, app.height-8))
+		screen.content = NewTextBuf(content, max(1, app.bodyWidth()-4), max(1, app.bodyHeight()-8))
 	} else if defaultScope(app) == core.ScopeUser {
 		screen.scope = 1
 	}
 
+	screen.initialName, screen.initialContent = screen.name.Value(), screen.content.Text()
+	screen.initialScope = screen.scope
+	screen.resize()
 	return screen
 }
 
@@ -89,77 +95,111 @@ func defaultScope(app *App) string {
 // Init focuses the name field.
 func (s *TemplateScreen) Init() tea.Cmd { return nil }
 
-// Update routes keys: Tab cycles focus, Ctrl+S saves, Ctrl+D deletes.
+// Update routes input without stealing printable keys from text fields.
 func (s *TemplateScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
-	switch message := msg.(type) {
-	case tea.WindowSizeMsg:
-		s.name.Width = max(1, message.Width-7)
-		s.content.SetSize(max(1, message.Width), max(1, message.Height-8))
+	if _, ok := msg.(tea.WindowSizeMsg); ok {
+		s.resize()
 		return s, nil
-	case tea.KeyMsg:
-		name := keyName(message)
-		switch name {
-		case "ctrl+s":
-			s.save()
-			return s, nil
-		case "ctrl+d":
-			s.delete()
-			return s, nil
-		case "tab":
-			s.cycleFocus()
-			return s, nil
-		case "esc":
-			return s, s.back()
-		case "q":
-			// q is a printable key inside the text fields.
-			if s.focus == "scope" {
-				return s, s.back()
-			}
-		}
-
-		var cmd tea.Cmd
-		switch s.focus {
-		case "name":
-			s.name, cmd = s.name.Update(message)
-			if name == "enter" {
-				s.save()
-			}
-		case "scope":
-			if name == "up" || name == "down" {
-				s.scope = clamp(s.scope+delta(name), 0, len(scopeOptions)-1)
-			}
-		case "content":
-			if s.readOnly {
-				return s, nil
-			}
-			s.content.Focused = true
-			s.content.Update(message)
-		}
-		return s, cmd
 	}
-	return s, nil
-}
-
-func (s *TemplateScreen) cycleFocus() {
+	message, ok := msg.(tea.KeyMsg)
+	if !ok {
+		return s, nil
+	}
+	name := keyName(message)
+	switch name {
+	case "ctrl+s":
+		s.save()
+		return s, nil
+	case "ctrl+d":
+		s.delete()
+		return s, nil
+	case "tab", "shift+tab":
+		s.discardPending, s.quitPending = false, false
+		direction := 1
+		if name == "shift+tab" {
+			direction = -1
+		}
+		return s, s.changeFocus(direction)
+	case "esc":
+		return s, s.back()
+	case "q":
+		if s.focus == "scope" {
+			return s, s.back()
+		}
+	}
+	before := s.name.Value() + "\x00" + s.content.Text()
+	oldScope := s.scope
+	var cmd tea.Cmd
 	switch s.focus {
 	case "name":
-		s.focus = "scope"
-		s.name.Blur()
+		s.name, cmd = s.name.Update(message)
+		if name == "enter" {
+			return s, s.changeFocus(1)
+		}
 	case "scope":
-		s.focus = "content"
-		s.content.Focused = true
-	default:
-		s.focus = "name"
-		s.content.Focused = false
-		s.name.Focus()
+		if name == "up" || name == "left" {
+			s.scope = max(0, s.scope-1)
+		}
+		if name == "down" || name == "right" {
+			s.scope = min(len(scopeOptions)-1, s.scope+1)
+		}
+	case "content":
+		if !s.readOnly {
+			s.content.Update(message)
+		}
 	}
+	if before != s.name.Value()+"\x00"+s.content.Text() || oldScope != s.scope {
+		s.confirmedTarget, s.confirmedDelete = "", ""
+		s.discardPending, s.quitPending = false, false
+		s.status = ""
+	}
+	return s, cmd
 }
 
-// back cancels a pending delete or returns to the previous screen.
+func (s *TemplateScreen) resize() {
+	s.name.Width = max(1, s.app.bodyWidth()-12)
+	s.content.SetSize(max(1, s.app.bodyWidth()-4), max(1, s.app.bodyHeight()-8))
+}
+func (s *TemplateScreen) changeFocus(direction int) tea.Cmd {
+	fields := []string{"name", "scope", "content"}
+	index := 0
+	for i, field := range fields {
+		if field == s.focus {
+			index = i
+		}
+	}
+	s.focus = fields[(index+direction+len(fields))%len(fields)]
+	s.name.Blur()
+	s.content.Focused = s.focus == "content" && !s.readOnly
+	if s.focus == "name" {
+		return s.name.Focus()
+	}
+	return nil
+}
+func (s *TemplateScreen) dirty() bool {
+	return !s.readOnly && (s.name.Value() != s.initialName || s.scope != s.initialScope || s.content.Text() != s.initialContent)
+}
+func (s *TemplateScreen) requestQuit() tea.Cmd {
+	if s.quitPending {
+		s.app.Quit()
+		return tea.Quit
+	}
+	s.quitPending = true
+	s.status = "Unsaved changes. Press Ctrl+Q again to discard and quit; Ctrl+S saves."
+	s.app.Notify(s.status, "warning")
+	return nil
+}
 func (s *TemplateScreen) back() tea.Cmd {
-	if s.confirmedDelete != "" {
-		s.confirmedDelete = ""
-		s.status = "Delete cancelled."
+	if s.confirmedDelete != "" || s.confirmedTarget != "" || s.quitPending {
+		s.confirmedDelete, s.confirmedTarget = "", ""
+		s.quitPending = false
+		s.status = "Confirmation cancelled."
+		return nil
+	}
+	if s.dirty() && !s.discardPending {
+		s.discardPending = true
+		s.status = "Unsaved changes. Press Esc again to discard; Ctrl+S saves."
+		s.app.Notify(s.status, "warning")
 		return nil
 	}
 	s.app.Pop()
@@ -168,6 +208,7 @@ func (s *TemplateScreen) back() tea.Cmd {
 
 // save writes the template, confirming an overwrite on the second Ctrl+S.
 func (s *TemplateScreen) save() {
+	s.discardPending, s.quitPending = false, false
 	if s.readOnly {
 		message := "Cannot save a template whose content could not be read."
 		s.status = "✗ " + message
@@ -307,47 +348,60 @@ func clamp(value, low, high int) int {
 	return value
 }
 
-func delta(direction string) int {
-	if direction == "up" {
-		return -1
-	}
-	return 1
-}
-
-// View renders the editor.
+// View renders metadata, a bounded content pane and persistent save feedback.
 func (s *TemplateScreen) View() string {
-	title := "New template"
-	if s.mode == "edit" {
-		title = fmt.Sprintf("Editing template: /%s  ·  [%s]", s.template.Name, s.template.Source)
+	width, height := s.app.bodyWidth(), s.app.bodyHeight()
+	scope := "Project · this workspace"
+	if s.scope == 1 {
+		scope = "User · all workspaces"
 	}
-
-	scopeView := ""
-	for index, option := range scopeOptions {
-		marker := "  "
-		if index == s.scope {
-			marker = "> "
-		}
-		label := "Project — .promptcraft/commands (this project)"
-		if option == core.ScopeUser {
-			label = "User — ~/.promptcraft/commands (all projects)"
-		}
-		line := marker + label
-		if index == s.scope && s.focus == "scope" {
-			line = selectedStyle.Render(line)
-		}
-		scopeView += line + "\n"
+	nameView := fitLine(s.name.View(), width)
+	if s.focus == "name" {
+		nameView = selectedStyle.Render(nameView)
 	}
-
-	hint := "The first line of the content is shown as the description in the list. Use $ARGUMENTS where the typed arguments go. Save with Ctrl+S."
-
-	return fmt.Sprintf("%s\n%s\n%s\n%s\n%s", title, s.name.View(), scopeView, s.content.View(), statusStyle.Render(s.status)+"\n"+dimStyle.Render(hint))
+	scopeView := "Scope  " + scope + "  ←/→"
+	if s.focus == "scope" {
+		scopeView = selectedStyle.Render(scopeView)
+	}
+	title := "Content · $ARGUMENTS inserts your arguments"
+	if s.readOnly {
+		title = "Content · read-only (load failed)"
+	}
+	content := s.content
+	content.SetSize(max(1, width-4), max(1, height-8))
+	state := "All changes saved"
+	if s.mode == "create" {
+		state = "New template · Ctrl+S saves"
+	}
+	if s.dirty() {
+		state = "● Unsaved changes · Ctrl+S saves"
+	}
+	if s.status != "" {
+		state = s.status
+	}
+	position := fmt.Sprintf("Ln %d, Col %d · %d characters", s.content.CaretLine+1, s.content.CaretCol+1, len([]rune(s.content.Text())))
+	if height < 10 {
+		content.SetSize(max(1, width-4), max(1, height-4))
+		return nameView + "\n" + scopeView + "\n" + content.View() + "\n" + dimStyle.Render(fitLine(position, width)) + "\n" + fitLine(state, width)
+	}
+	return nameView + "\n" + scopeView + "\n" + pane(title, content.View(), width, max(4, height-5), s.focus == "content") + "\n" + dimStyle.Render(fitLine(position, width)) + "\n" + statusStyle.Render(fitLine(state, width))
 }
-
-// Hints lists the editor keymap.
 func (s *TemplateScreen) Hints() []Hint {
-	hints := []Hint{{"tab", "field"}, {"ctrl+s", "save"}}
+	if s.discardPending {
+		return []Hint{{"esc", "discard changes"}, {"ctrl+s", "save instead"}, {"type", "keep editing"}}
+	}
+	if s.quitPending {
+		return []Hint{{"ctrl+q", "discard & quit"}, {"ctrl+s", "save instead"}, {"esc", "cancel"}}
+	}
+	if s.confirmedDelete != "" {
+		return []Hint{{"ctrl+d", "confirm delete"}, {"esc", "cancel"}}
+	}
+	if s.confirmedTarget != "" {
+		return []Hint{{"ctrl+s", "confirm overwrite"}, {"esc", "cancel"}}
+	}
+	hints := []Hint{{"tab/shift+tab", "field"}, {"ctrl+s", "save"}, {"ctrl+z/y", "undo/redo"}}
 	if s.mode == "edit" {
 		hints = append(hints, Hint{"ctrl+d", "delete"})
 	}
-	return append(hints, Hint{"esc", "back (discard)"})
+	return append(hints, Hint{"esc", "back"})
 }

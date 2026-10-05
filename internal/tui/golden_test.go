@@ -25,11 +25,16 @@ var ansiPattern = regexp.MustCompile("\x1b[\\[()][0-9;?]*[A-Za-z]|\x1b][^\x07\x1
 
 // tempPathPattern matches the temporary directory shown in rendered paths,
 // including truncated ones.
-var tempPathPattern = regexp.MustCompile(`/tmp/[^\s│]*`)
+var tempPathPattern = regexp.MustCompile(regexp.QuoteMeta(filepath.Clean(os.TempDir())) + `[^\s│]*`)
 
 func normalizeGolden(text string) string {
 	plain := ansiPattern.ReplaceAllString(text, "")
 	plain = tempPathPattern.ReplaceAllString(plain, "<temp>")
+	lines := strings.Split(plain, "\n")
+	for i := range lines {
+		lines[i] = strings.TrimRight(lines[i], " \t\r")
+	}
+	plain = strings.Join(lines, "\n")
 	return strings.TrimSpace(plain)
 }
 
@@ -82,7 +87,7 @@ func goldenApp(t *testing.T) *App {
 	}
 
 	app := NewApp(processor, deps, &strings.Builder{})
-	app.width, app.height = 60, 14
+	app.width, app.height = 80, 24
 	return app
 }
 
@@ -116,7 +121,7 @@ func TestGoldenRunScreen(t *testing.T) {
 
 	model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
 	run := currentScreen(app).(*RunScreen)
-	run.input.SetValue("main.py")
+	run.input.SetValue("main.go")
 	model.Update(tea.KeyMsg{Type: tea.KeyEnter})
 
 	requireGolden(t, "run_screen", normalizeGolden(model.View()))
@@ -132,7 +137,7 @@ func TestGoldenResultScreen(t *testing.T) {
 
 	model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
 	run := currentScreen(app).(*RunScreen)
-	run.input.SetValue("main.py")
+	run.input.SetValue("main.go")
 	model.Update(tea.KeyMsg{Type: tea.KeyTab}) // leave the field so d works
 	model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
 
@@ -183,7 +188,7 @@ func TestProgramDrivesTheScreenStack(t *testing.T) {
 	refresh(app, home)
 
 	model := NewModel(app)
-	tm := teatest.NewTestModel(t, model, teatest.WithInitialTermSize(60, 14))
+	tm := teatest.NewTestModel(t, model, teatest.WithInitialTermSize(80, 24))
 
 	teatest.WaitFor(t, tm.Output(), func(out []byte) bool {
 		return strings.Contains(normalizeGolden(string(out)), "Code review")

@@ -1,43 +1,22 @@
-PromptCraft v0.1.0
-╭──────────────────────────────────────────────────────────────────────────────╮
-│ Keyboard shortcuts                                                           │
-│                                                                              │
-│ PromptCraft TUI — keyboard shortcuts                                         │
-│ ────────────────────────────────────                                         │
-│ Home (template list)                                                         │
-│   Up / Down        Move through templates                                    │
-│   Enter / r        Run the selected template                                 │
-│   n                Create a new template                                     │
-│   e                Edit the selected template                                │
-│   d                Delete the selected template (press twice to confirm)     │
-│   i                Initialize project structure (.promptcraft)               │
-│   v                Show the installed version                                │
-│   f                Refresh the template list                                 │
-│   ?                Show this help                                            │
-│   q / Esc          Quit                                                      │
-│                                                                              │
-│ Run template                                                                 │
-│   Type             Arguments for the $ARGUMENTS placeholder                  │
-│   Enter            Run and copy the result to the clipboard                  │
-│   Tab              Leave the field so the shortcuts below work               │
-│   s                Run and copy to the clipboard                             │
-│   d                Run and show the result on screen                         │
-│   Esc / q          Back (no copy)                                            │
-│                                                                              │
-│ Result                                                                       │
-│   c                Copy the result to the clipboard                          │
-│   Esc / q          Back                                                      │
-│                                                                              │
-│ New / edit template                                                          │
-│   Tab              Move between name, scope and content                      │
-│   Ctrl+S           Save the template (project or user scope)                 │
-│                    Editing to another name/scope moves the template there    │
-│                    (the original file is removed).                           │
-│   Ctrl+D           Delete the template being edited (press twice to confirm) │
-│   Esc / q          Back (discard changes)                                    │
-│                                                                              │
-│ Init / version / help                                                        │
-│   Esc / q          Close                                                     │
-│                                                                              │
-╰──────────────────────────────────────────────────────────────────────────────╯
-esc close
+◆ PromptCraft / Keyboard guide                                          v0.1.0
+──────────────────────────────────────────────────────────────────────────────
+╭────────────────────────────────────────────────────────────────────────────╮
+│ Keyboard guide                                                             │
+│ LIBRARY                                                                    │
+│   ↑/↓ or j/k       Select a template                                       │
+│   PgUp/PgDn        Browse pages                                            │
+│   / or Ctrl+F      Search name, description and source                     │
+│   Enter/r          Open the selected template                              │
+│   n / e / d        New / edit / delete (confirm twice)                     │
+│   i / f / v        Project setup / refresh / about                         │
+│   ?                Open this guide                                         │
+│   q / Esc          Quit (Esc clears search or confirmation first)          │
+│                                                                            │
+│ RUN A TEMPLATE                                                             │
+│   Type             Fill $ARGUMENTS with your text                          │
+│   Enter/Ctrl+S     Generate and copy                                       │
+╰────────────────────────────────────────────────────────────────────────────╯
+Scroll   0%
+
+Project structure ready.
+esc close · ↑/↓ scroll · pgup/pgdn page

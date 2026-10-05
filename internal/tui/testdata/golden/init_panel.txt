@@ -1,9 +1,22 @@
-PromptCraft v0.1.0
-╭──────────────────────────────────────────────────────────────────────────────────────────╮
-│ Initialize project structure (.promptcraft) — done, existing templates were not touched. │
-│                                                                                          │
-│   • Created example template: exemplo.md                                                 │
-│   • Directory already exists: .promptcraft/commands/                                     │
-╰──────────────────────────────────────────────────────────────────────────────────────────╯
+◆ PromptCraft / Project setup                                           v0.1.0
+──────────────────────────────────────────────────────────────────────────────
+╭────────────────────────────────────────────────────────────────────────────╮
+│ Project setup                                                              │
+│ Project structure ready.                                                   │
+│ Existing templates were not touched.                                       │
+│                                                                            │
+│ • Directory already exists: .promptcraft/commands/                         │
+│ • Created example template: exemplo.md                                     │
+│                                                                            │
+│                                                                            │
+│                                                                            │
+│                                                                            │
+│                                                                            │
+│                                                                            │
+│                                                                            │
+│                                                                            │
+╰────────────────────────────────────────────────────────────────────────────╯
+Scroll 100%
+
 Project structure ready.
-esc close
+esc close · ↑/↓ scroll · pgup/pgdn page

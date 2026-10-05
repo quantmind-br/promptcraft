@@ -6,90 +6,102 @@ import (
 
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 
 	"github.com/quantmind-br/promptcraft/internal/clipboard"
 	"github.com/quantmind-br/promptcraft/internal/core"
 )
 
-// HelpText is the full keyboard reference shown by the help panel.
-const HelpText = `PromptCraft TUI — keyboard shortcuts
-────────────────────────────────────
-Home (template list)
-  Up / Down        Move through templates
-  Enter / r        Run the selected template
-  n                Create a new template
-  e                Edit the selected template
-  d                Delete the selected template (press twice to confirm)
-  i                Initialize project structure (.promptcraft)
-  v                Show the installed version
-  f                Refresh the template list
-  ?                Show this help
-  q / Esc          Quit
+const HelpText = `LIBRARY
+  ↑/↓ or j/k       Select a template
+  PgUp/PgDn        Browse pages
+  / or Ctrl+F      Search name, description and source
+  Enter/r          Open the selected template
+  n / e / d        New / edit / delete (confirm twice)
+  i / f / v        Project setup / refresh / about
+  ?                Open this guide
+  q / Esc          Quit (Esc clears search or confirmation first)
 
-Run template
-  Type             Arguments for the $ARGUMENTS placeholder
-  Enter            Run and copy the result to the clipboard
-  Tab              Leave the field so the shortcuts below work
-  s                Run and copy to the clipboard
-  d                Run and show the result on screen
-  Esc / q          Back (no copy)
+RUN A TEMPLATE
+  Type             Fill $ARGUMENTS with your text
+  Enter/Ctrl+S     Generate and copy
+  Ctrl+P           Generate and preview, without copying
+  Tab/Shift+Tab    Move between field and actions
+  s / d            Copy / preview when the field is not focused
+  Esc              Return to the library
 
-Result
-  c                Copy the result to the clipboard
-  Esc / q          Back
+GENERATED PROMPT
+  ↑/↓, PgUp/PgDn   Scroll (Home/End jump to the edges)
+  c                Copy or retry clipboard delivery
+  Esc/q            Return to the arguments
 
-New / edit template
-  Tab              Move between name, scope and content
-  Ctrl+S           Save the template (project or user scope)
-                   Editing to another name/scope moves the template there
-                   (the original file is removed).
-  Ctrl+D           Delete the template being edited (press twice to confirm)
-  Esc / q          Back (discard changes)
+TEMPLATE EDITOR
+  Tab/Shift+Tab    Next / previous field
+  ←/→ or ↑/↓       Change the project/user scope
+  Ctrl+S           Save (confirm overwrites twice)
+  Ctrl+D           Delete an existing template (confirm twice)
+  Esc              Back; repeat Esc to discard unsaved changes
+  Ctrl+Q           Quit; repeat to discard unsaved changes
+  Home/End         Start / end of the current content line
+  Ctrl+Z/Ctrl+Y    Undo / redo content edits
 
-Init / version / help
-  Esc / q          Close
-`
+TEMPLATE SYNTAX
+  $ARGUMENTS       Full supplied text
+  $ARGUMENTS[0]    First CLI argument (indexes start at zero)
+  The first line is the description shown in the library.
+  Project templates take precedence over user templates.
 
-// copyFeedback builds the status line and toast for a successful copy. OSC 52
-// writes are never acknowledged by the terminal, so they are reported as sent.
+CLIPBOARD
+  Native clipboard when available; OSC 52 through the terminal.
+  OSC 52 delivery is sent, not acknowledged by the terminal.
+  If copying fails, use Ctrl+P to view and select the result.
+
+GLOBAL
+  Ctrl+Q/Ctrl+C    Quit safely (unsaved changes require confirmation)`
+
 func copyFeedback(route, name string, chars int) (string, string) {
 	if route == clipboard.RouteOSC52 {
-		return fmt.Sprintf("✓ Sent to clipboard via terminal (OSC 52, %d chars).", chars),
-			fmt.Sprintf("/%s sent to clipboard (OSC 52)", name)
+		return fmt.Sprintf("✓ Sent to clipboard via terminal (OSC 52, %d chars).", chars), fmt.Sprintf("/%s sent to clipboard (OSC 52)", name)
 	}
-	return fmt.Sprintf("✓ Copied to clipboard (%d chars).", chars),
-		fmt.Sprintf("/%s copied to clipboard", name)
+	return fmt.Sprintf("✓ Copied to clipboard (%d chars).", chars), fmt.Sprintf("/%s copied to clipboard", name)
 }
 
-// templateItem wraps a discovered template for the list widget.
-type templateItem struct {
-	info core.CommandInfo
+type templateItem struct{ info core.CommandInfo }
+
+func (i templateItem) FilterValue() string { return i.info.Name + " " + i.info.Description }
+
+type templateDelegate struct{ compact bool }
+
+func (d templateDelegate) Height() int {
+	if d.compact {
+		return 1
+	}
+	return 2
 }
-
-func (i templateItem) FilterValue() string { return i.info.Name }
-
-// templateDelegate renders one row of the template list.
-type templateDelegate struct{}
-
-func (d templateDelegate) Height() int                               { return 1 }
-func (d templateDelegate) Spacing() int                              { return 0 }
-func (d templateDelegate) Update(msg tea.Msg, m *list.Model) tea.Cmd { return nil }
-
+func (d templateDelegate) Spacing() int {
+	if d.compact {
+		return 0
+	}
+	return 1
+}
+func (d templateDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd { return nil }
 func (d templateDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
 	entry, ok := item.(templateItem)
 	if !ok {
 		return
 	}
-	text := fmt.Sprintf("%s  ·  %s  [%s]", entry.info.Name, entry.info.Description, entry.info.Source)
+	width := max(1, m.Width())
+	marker, style := "  ", itemStyle
 	if index == m.Index() {
-		_, _ = fmt.Fprintln(w, selectedStyle.Render(text))
+		marker, style = "› ", selectedStyle
+	}
+	name := marker + "/" + entry.info.Name + "  [" + entry.info.Source + "]"
+	if d.compact {
+		_, _ = fmt.Fprint(w, style.Render(fitLine(name, width)))
 		return
 	}
-	_, _ = fmt.Fprintln(w, itemStyle.Render(text))
+	description := entry.info.Description
+	if description == "" {
+		description = "No description yet"
+	}
+	_, _ = fmt.Fprint(w, style.Render(fitLine(name, width))+"\n"+dimStyle.Render(fitLine("  "+description, width)))
 }
-
-var (
-	selectedStyle = lipgloss.NewStyle().Bold(true)
-	itemStyle     = lipgloss.NewStyle()
-)

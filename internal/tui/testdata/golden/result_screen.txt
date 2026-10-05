@@ -1,13 +1,22 @@
-PromptCraft v0.1.0
-Result for /review  ·  14 chars
-Review main.py                                              
-                                                            
-                                                            
-                                                            
-                                                            
-                                                            
-                                                            
-                                                            
-                                                            
+◆ PromptCraft / Generated prompt                                        v0.1.0
+──────────────────────────────────────────────────────────────────────────────
+╭────────────────────────────────────────────────────────────────────────────╮
+│ /review · 14 characters · 1 lines                                          │
+│ Review main.go                                                             │
+│                                                                            │
+│                                                                            │
+│                                                                            │
+│                                                                            │
+│                                                                            │
+│                                                                            │
+│                                                                            │
+│                                                                            │
+│                                                                            │
+│                                                                            │
+│                                                                            │
+╰────────────────────────────────────────────────────────────────────────────╯
+Scroll 100% · ↑/↓ or PgUp/PgDn
 Clipboard was not used for this result. Press c to copy it.
-c copy to clipboard · esc back
+
+Ready · ? opens the keyboard guide
+esc back · ↑/↓ scroll · pgup/pgdn page · home/end jump · c copy

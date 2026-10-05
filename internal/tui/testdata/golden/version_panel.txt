@@ -1,7 +1,22 @@
-PromptCraft v0.1.0
-╭────────────────────╮
-│ Installed version  │
-│                    │
-│ PromptCraft v0.1.0 │
-╰────────────────────╯
-esc close
+◆ PromptCraft / About                                                   v0.1.0
+──────────────────────────────────────────────────────────────────────────────
+╭────────────────────────────────────────────────────────────────────────────╮
+│ About PromptCraft                                                          │
+│ PromptCraft v0.1.0                                                         │
+│                                                                            │
+│ Reusable prompts. Less repetition. More focus.                             │
+│                                                                            │
+│ A standalone Go application powered by Bubble Tea.                         │
+│ Project and user templates · native and terminal clipboard                 │
+│                                                                            │
+│ github.com/quantmind-br/promptcraft                                        │
+│                                                                            │
+│                                                                            │
+│                                                                            │
+│                                                                            │
+│                                                                            │
+╰────────────────────────────────────────────────────────────────────────────╯
+Scroll 100%
+
+Project structure ready.
+esc close · ↑/↓ scroll · pgup/pgdn page

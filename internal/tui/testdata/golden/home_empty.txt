@@ -1,15 +1,23 @@
-PromptCraft v0.1.0
-No templates found.
-No items.
-         
-         
-         
-         
-         
-         
-         
-         
-         
-Press n to create a template, or i to initialize the project structure.
+◆ PromptCraft / Template library                                        v0.1.0
+──────────────────────────────────────────────────────────────────────────────
+╭────────────────────────────────────────────────────────────────────────────╮
+│ Templates · 0                                                              │
+│ No templates found.                                                        │
+│                                                                            │
+│ Your prompt workspace starts here.                                         │
+│ Press n to create your first template, or i to set up this project with an │
+│ example.                                                                   │
+╰────────────────────────────────────────────────────────────────────────────╯
+╭────────────────────────────────────────────────────────────────────────────╮
+│ Preview                                                                    │
+│ Select a template to explore its content.                                  │
+│                                                                            │
+│                                                                            │
+╰────────────────────────────────────────────────────────────────────────────╯
 
-↑/↓ move · enter run · n new · e edit · d delete · i init · v version · f refresh · ? help · q quit
+
+
+
+Ready · ? opens the keyboard guide
+? help · q quit · ↑/↓ move · enter run · / search · n new · e edit · d delete
+i setup · f refresh

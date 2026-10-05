@@ -1,7 +1,23 @@
-PromptCraft v0.1.0
-Run: /review  ·  [Project]  ·  Code review
-args: main.py 
-The $ARGUMENTS placeholder is replaced by the arguments you type here. Press Enter to run (copies to the clipboard by default); Tab leaves the field so s and d work.
-✓ Sent to clipboard via terminal (OSC 52, 13 chars). Press d to view it on screen, Esc to go back.
+◆ PromptCraft / Run /review                                             v0.1.0
+──────────────────────────────────────────────────────────────────────────────
+╭────────────────────────────────────────────────────────────────────────────╮
+│ Generate a prompt                                                          │
+│ /review  [Project]                                                         │
+│ Code review                                                                │
+│                                                                            │
+│ Arguments                                                                  │
+│ › main.go                                                                  │
+│   Generate & copy      Preview only                                        │
+│ Your text replaces $ARGUMENTS. Enter copies; Ctrl+P previews without       │
+│ copying.                                                                   │
+│                                                                            │
+│ ✓ Sent to clipboard via terminal (OSC 52, 13 chars). Ctrl+P previews it;   │
+│ Esc returns.                                                               │
+│                                                                            │
+│                                                                            │
+│                                                                            │
+╰────────────────────────────────────────────────────────────────────────────╯
+
 /review sent to clipboard (OSC 52)
-type arguments · enter run + copy · tab leave field · s copy · d show · esc back
+esc back · enter generate & copy · ctrl+p preview · tab next field/action
+shift+tab previous

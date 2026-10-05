@@ -36,6 +36,10 @@ func TestQuitKeyStaysAvailableToTheTextFields(t *testing.T) {
 		t.Fatalf("tab must move focus to the scope selector, got %q", editor.focus)
 	}
 	press(app, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+	if !editor.discardPending {
+		t.Fatal("unsaved content requires discard confirmation")
+	}
+	press(app, model, tea.KeyMsg{Type: tea.KeyEscape})
 	if _, ok := currentScreen(app).(*HomeScreen); !ok {
 		t.Fatalf("q outside a text field must go back, got %T", currentScreen(app))
 	}
@@ -147,13 +151,13 @@ func TestToastSchedulesAnExpiryCommand(t *testing.T) {
 	home := currentScreen(app).(*HomeScreen)
 	refresh(app, home)
 
-	press(app, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}}) // warning toast with TTL
-	if app.toast == nil {
-		t.Fatal("a warning must create a toast")
+	_, cmd := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
+	if app.toast == nil || cmd == nil {
+		t.Fatal("a new warning must schedule an expiry command")
 	}
-	_, cmd := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
-	if cmd == nil {
-		t.Fatal("an active toast must schedule its expiry")
+	_, repeat := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
+	if repeat != nil {
+		t.Fatal("an existing toast must not schedule duplicate timers")
 	}
 
 	// Advancing the clock past the TTL clears it on the next message.

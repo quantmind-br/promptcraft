@@ -56,7 +56,7 @@ func testApp(t *testing.T) (*App, *bytes.Buffer, *[]string) {
 		sent = append(sent, text)
 		return nil
 	}
-	app.width, app.height = 60, 14
+	app.width, app.height = 80, 24
 	return app, &bytes.Buffer{}, &sent
 }
 
@@ -304,7 +304,9 @@ func TestTemplateEditorSavesConfirmsOverwriteAndMoves(t *testing.T) {
 	}
 
 	// Editing to another scope moves the template there.
-	press(app, model, tea.KeyMsg{Type: tea.KeyEscape}) // close without writing
+	press(app, model, tea.KeyMsg{Type: tea.KeyEscape}) // cancel overwrite
+	press(app, model, tea.KeyMsg{Type: tea.KeyEscape}) // ask to discard
+	press(app, model, tea.KeyMsg{Type: tea.KeyEscape}) // discard and return
 	refresh(app, home)
 	press(app, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'e'}})
 	editor = currentScreen(app).(*TemplateScreen)

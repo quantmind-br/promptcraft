@@ -4,88 +4,115 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/quantmind-br/promptcraft/internal/core"
 	"github.com/quantmind-br/promptcraft/internal/version"
 )
 
-// modal is the shared behaviour of the feedback panels.
+// modal is a scrollable information panel, never taller than the workspace.
 type modal struct {
-	app   *App
-	lines []string
+	app      *App
+	title    string
+	lines    []string
+	viewport viewport.Model
 }
 
-// Init reports the panel content when it opens.
+func newModal(app *App, title string, lines []string) modal {
+	panel := modal{app: app, title: title, lines: lines, viewport: viewport.New(1, 1)}
+	panel.resize()
+	return panel
+}
+func (m *modal) resize() {
+	offset := m.viewport.YOffset
+	m.viewport.Width = max(1, m.app.bodyWidth()-4)
+	m.viewport.Height = max(1, m.contentHeight())
+	m.viewport.SetContent(wrapText(strings.Join(m.lines, "\n"), m.viewport.Width))
+	m.viewport.SetYOffset(offset)
+}
 func (m *modal) Init() tea.Cmd { return nil }
-
-// Update closes the panel on Esc, q or Enter.
 func (m *modal) Update(msg tea.Msg) (Screen, tea.Cmd) {
+	if _, ok := msg.(tea.WindowSizeMsg); ok {
+		m.resize()
+		return m, nil
+	}
 	if key, ok := msg.(tea.KeyMsg); ok {
 		switch keyName(key) {
 		case "esc", "q", "enter":
 			m.app.Pop()
+			return m, nil
+		case "home":
+			m.viewport.GotoTop()
+			return m, nil
+		case "end":
+			m.viewport.GotoBottom()
+			return m, nil
 		}
 	}
-	return m, nil
+	var cmd tea.Cmd
+	m.viewport, cmd = m.viewport.Update(msg)
+	return m, cmd
+}
+func (m *modal) contentHeight() int {
+	if m.app.bodyHeight() < 8 {
+		return max(1, m.app.bodyHeight()-2)
+	}
+	return max(1, m.app.bodyHeight()-4)
 }
 
-// View renders the panel.
 func (m *modal) View() string {
-	return panelStyle.Render(strings.Join(m.lines, "\n"))
+	if m.app.bodyHeight() < 8 {
+		return headerStyle.Render(m.title) + "\n" + m.viewport.View() + "\n" + dimStyle.Render(fmt.Sprintf("Scroll %3.0f%%", m.viewport.ScrollPercent()*100))
+	}
+	return pane(m.title, m.viewport.View(), m.app.bodyWidth(), m.app.bodyHeight()-1, false) + "\n" + dimStyle.Render(fmt.Sprintf("Scroll %3.0f%%", m.viewport.ScrollPercent()*100))
+}
+func (m *modal) Hints() []Hint {
+	return []Hint{{"↑/↓", "scroll"}, {"pgup/pgdn", "page"}, {"esc", "close"}}
 }
 
-// Hints lists the modal keymap.
-func (m *modal) Hints() []Hint { return []Hint{{"esc", "close"}} }
-
-// InitResultScreen shows the outcome of a project initialization.
 type InitResultScreen struct {
 	modal
 	result core.InitResult
 }
 
-// NewInitResultScreen builds the initialization summary panel.
 func NewInitResultScreen(app *App, result core.InitResult) *InitResultScreen {
-	lines := []string{
-		"Initialize project structure (.promptcraft) — done, existing templates were not touched.",
-		"",
+	lines := []string{"Project structure ready.", "Existing templates were not touched.", ""}
+	for _, message := range result.Items {
+		lines = append(lines, "• "+message)
 	}
-	for _, message := range result.Created {
-		lines = append(lines, "  • "+message)
-	}
-	for _, message := range result.Existing {
-		lines = append(lines, "  • "+message)
-	}
-	screen := &InitResultScreen{modal: modal{app: app, lines: lines}, result: result}
-	return screen
+	return &InitResultScreen{modal: newModal(app, "Project setup", lines), result: result}
 }
-
-// Init notifies that the structure is ready.
 func (s *InitResultScreen) Init() tea.Cmd {
 	s.app.Notify("Project structure ready.", "information")
 	return nil
 }
 
-// VersionScreen shows the installed version.
-type VersionScreen struct {
-	modal
+// Preserve the concrete screen type while using the shared panel behavior.
+func (s *InitResultScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
+	_, cmd := s.modal.Update(msg)
+	return s, cmd
 }
 
-// NewVersionScreen builds the version panel.
+type VersionScreen struct{ modal }
+
 func NewVersionScreen(app *App) *VersionScreen {
-	return &VersionScreen{modal: modal{app: app, lines: []string{
-		"Installed version",
-		"",
-		fmt.Sprintf("PromptCraft v%s", version.Version),
-	}}}
+	return &VersionScreen{modal: newModal(app, "About PromptCraft", []string{
+		fmt.Sprintf("PromptCraft v%s", version.Version), "", "Reusable prompts. Less repetition. More focus.", "",
+		"A standalone Go application powered by Bubble Tea.", "Project and user templates · native and terminal clipboard", "", "github.com/quantmind-br/promptcraft",
+	})}
+}
+func (s *VersionScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
+	_, cmd := s.modal.Update(msg)
+	return s, cmd
 }
 
-// HelpScreen shows the full keyboard reference.
-type HelpScreen struct {
-	modal
-}
+type HelpScreen struct{ modal }
 
-// NewHelpScreen builds the help panel.
 func NewHelpScreen(app *App) *HelpScreen {
-	return &HelpScreen{modal: modal{app: app, lines: []string{"Keyboard shortcuts", "", HelpText}}}
+	return &HelpScreen{modal: newModal(app, "Keyboard guide", []string{HelpText})}
+}
+func (s *HelpScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
+	_, cmd := s.modal.Update(msg)
+	return s, cmd
 }
