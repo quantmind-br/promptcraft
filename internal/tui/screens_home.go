@@ -92,9 +92,17 @@ func (s *HomeScreen) highlight(template core.CommandInfo) {
 		s.highlightedName = ""
 		return
 	}
+	// Moving the cursor must drop a confirmation armed on another template.
+	if s.confirmedDelete != "" && s.confirmedDelete != template.Path {
+		s.confirmedDelete = ""
+		s.status = ""
+	}
 	s.highlightedName = template.Name
 	s.details = fmt.Sprintf("/%s  ·  [%s]  ·  %s", template.Name, template.Source, template.Path)
 }
+
+// Resume reloads the list when the screen becomes active again after a mutation.
+func (s *HomeScreen) Resume() { s.populateList(s.highlightedName) }
 
 func (s *HomeScreen) selected() *core.CommandInfo {
 	if len(s.templates) == 0 {

@@ -105,6 +105,14 @@ func (a *App) expireToast() {
 	}
 }
 
+// toastExpiry returns the deadline of the active toast (zero when it never expires).
+func (a *App) toastExpiry() time.Time {
+	if a.toast == nil {
+		return time.Time{}
+	}
+	return a.toast.ExpiresAt
+}
+
 // Model is the Bubble Tea model wrapping the screen stack.
 type Model struct {
 	app *App
@@ -125,6 +133,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if size, ok := msg.(tea.WindowSizeMsg); ok {
 		m.app.width, m.app.height = size.Width, size.Height
 	}
+
+	expiry := m.app.toastExpiry()
 	m.app.expireToast()
 
 	screen := m.app.Current()
@@ -132,15 +142,41 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	m.app.stack[len(m.app.stack)-1] = updated
 
 	if m.app.pendingPush != nil {
-		m.app.stack = append(m.app.stack, m.app.pendingPush)
+		pushed := m.app.pendingPush
 		m.app.pendingPush = nil
+		m.app.stack = append(m.app.stack, pushed)
+		cmd = tea.Sequence(cmd, pushed.Init())
 	}
 	if m.app.pendingPop && len(m.app.stack) > 1 {
 		m.app.stack = m.app.stack[:len(m.app.stack)-1]
+		if resumer, ok := m.app.Current().(resumer); ok {
+			resumer.Resume()
+		}
 		m.app.pendingPop = false
 	}
 
+	// A toast must expire even while the interface is idle.
+	if m.app.toast != nil && !expiry.IsZero() && expiry.After(m.app.Now()) {
+		return m, tea.Sequence(cmd, toastTickCmd(expiry))
+	}
 	return m, cmd
+}
+
+// resumer refreshes state when a screen becomes active again.
+type resumer interface {
+	Resume()
+}
+
+type toastExpiredMsg struct{}
+
+func toastTickCmd(expiry time.Time) tea.Cmd {
+	return func() tea.Msg {
+		delay := time.Until(expiry)
+		if delay <= 0 {
+			return toastExpiredMsg{}
+		}
+		return tea.Tick(delay, func(time.Time) tea.Msg { return toastExpiredMsg{} })()
+	}
 }
 
 // View renders the header, the active screen, the toast, and the keymap footer.
@@ -175,6 +211,7 @@ var (
 	panelStyle  = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Padding(0, 1)
 	footerStyle = lipgloss.NewStyle()
 	keyStyle    = lipgloss.NewStyle().Bold(true)
+	caretStyle  = lipgloss.NewStyle().Bold(true).Underline(true)
 )
 
 func toastStyle(severity string) lipgloss.Style {

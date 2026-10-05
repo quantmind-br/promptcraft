@@ -140,14 +140,50 @@ func (b *TextBuf) Update(msg tea.Msg) {
 }
 
 // View renders the visible window of the buffer.
+// View renders the visible window of the buffer, wrapping to its width and
+// marking the caret position when the buffer has focus.
 func (b *TextBuf) View() string {
 	if b.height <= 0 {
 		return strings.Join(b.Lines, "\n")
 	}
+
 	start := 0
 	if b.CaretLine >= b.height {
 		start = b.CaretLine - b.height + 1
 	}
 	end := min(start+b.height, len(b.Lines))
-	return strings.Join(b.Lines[start:end], "\n")
+
+	rendered := make([]string, 0, end-start)
+	for index := start; index < end; index++ {
+		runes := []rune(b.Lines[index])
+		startCol := 0
+		if b.width > 0 && len(runes) > b.width {
+			if index == b.CaretLine {
+				startCol = max(0, min(len(runes)-b.width, b.CaretCol-b.width+1))
+			} else {
+				startCol = 0
+			}
+		}
+		stop := min(startCol+b.width, len(runes))
+		if b.width <= 0 {
+			stop = len(runes)
+		}
+
+		visible := runes[startCol:stop]
+		if b.Focused && index == b.CaretLine && startCol <= b.CaretCol && b.CaretCol < stop {
+			parts := make([]string, 0, len(visible))
+			for offset, r := range visible {
+				text := string(r)
+				if startCol+offset == b.CaretCol {
+					text = caretStyle.Render(text)
+				}
+				parts = append(parts, text)
+			}
+			rendered = append(rendered, strings.Join(parts, ""))
+			continue
+		}
+		rendered = append(rendered, string(visible))
+	}
+
+	return strings.Join(rendered, "\n")
 }

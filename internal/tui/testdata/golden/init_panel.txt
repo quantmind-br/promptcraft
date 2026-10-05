@@ -5,4 +5,5 @@ PromptCraft v0.1.0
 │   • Created example template: exemplo.md                                                 │
 │   • Directory already exists: .promptcraft/commands/                                     │
 ╰──────────────────────────────────────────────────────────────────────────────────────────╯
+Project structure ready.
 esc close
